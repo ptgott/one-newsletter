@@ -11,3 +11,28 @@ The goal is to make this a lightweight binary that you can deploy to low-cost VM
 It's also meant to be stateless, so you can build it into a machine image, use a self-healing VM service like AWS Auto Scaling, not need to worry about interruption. (We're assuming you're okay receiving your email newsletters a few minutes late every now and then.)
 
 While it won't be designed for managed services like Google Cloud Run or AWS Lambda (mainly due to tales of [surprise DDoS-related bills and Google account lockouts](https://news.ycombinator.com/item?id=22027459)), it will be a single Go module that you can wrap with your Lambda function or deploy as a container to Cloud Run.
+
+## Architecture
+
+The application needs to:
+
+- Parse and validate configurations, which are in the format:
+
+  ```json
+  {
+    // The URL path to query
+    "url": "<string>",
+    // CSS selector of the HTML element to scour for links
+    "wrapperSelector": "<string>",
+    // The CSS selector for each link within wrapperSelector
+    "linkSelector": "<string>",
+    // The CSS selector for the caption associated with linkSelector
+    "captionSelector": "<string"
+  }
+  ```
+
+- Grab HTML from user-selected sites at scheduled intervals
+
+- Parse HTML into lists of links
+
+- Email lists of links to the user
