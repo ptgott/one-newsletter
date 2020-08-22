@@ -16,20 +16,7 @@ While it won't be designed for managed services like Google Cloud Run or AWS Lam
 
 The application needs to:
 
-- Parse and validate configurations, which are in the format:
-
-  ```json
-  {
-    // The URL path to query
-    "url": "<string>",
-    // CSS selector of the HTML element to scour for links
-    "wrapperSelector": "<string>",
-    // The CSS selector for each link within wrapperSelector
-    "linkSelector": "<string>",
-    // The CSS selector for the caption associated with linkSelector
-    "captionSelector": "<string"
-  }
-  ```
+- Parse and validate configurations
 
 - Grab HTML from user-selected sites at scheduled intervals
 
