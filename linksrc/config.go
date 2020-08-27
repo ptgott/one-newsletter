@@ -15,31 +15,31 @@ import (
 type RawConfig struct {
 	// URL of the site containing links
 	URL string `json:"url"`
-	// CSS selector for an HTMl element containing a list of links
-	WrapperSelector string `json:"wrapperSelector"`
-	// CSS selector for a link within the wrapper
+	// CSS selector for a link within a list of links
 	ItemSelector string `json:"itemSelector"`
-	// CSS selector for a caption within a link item
+	// CSS selector for a caption, relative to ItemSelector
 	CaptionSelector string `json:"captionSelector"`
-	// CSS selector for the actua link within a link item. Should be an
-	// "a" element.
+	// CSS selector for the actual link within a link item. Should be an
+	// "a" element. Relative to ItemSelector.
 	LinkSelector string `json:"linkSelector"`
 }
 
 // Config represents a validated configuration document fit for
-// consumption elsewhere in the application
+// consumption elsewhere in the application. There is no support
+// for grouped (i.e., comma-separated) selectors. This is because, while
+// grouped selectors are useful for applying styles to generalized sets of
+// elements, the HTML parser needs to locate elements individually.
 type Config struct {
 	// URL of the site containing links
 	URL url.URL
-	// CSS selector for an HTMl element containing a list of links
-	WrapperSelector css.SelectorGroup
-	// CSS selector for a link within the wrapper
-	ItemSelector css.SelectorGroup
-	// CSS selector for a caption within a link item
-	CaptionSelector css.SelectorGroup
-	// CSS selector for the actua link within a link item. Should be an
-	// "a" element.
-	LinkSelector css.SelectorGroup
+	// CSS selector for a link within a list of links.
+	ItemSelector css.Selector
+	// CSS selector for a caption within a link item.
+	// Relative to ItemSelector
+	CaptionSelector css.Selector
+	// CSS selector for the actual link within a link item. Should be an
+	// "a" element. Relative to ItemSelector.
+	LinkSelector css.Selector
 }
 
 // Validate indicates whether a link source configuration is valid and
@@ -53,12 +53,6 @@ func Validate(c RawConfig) (Config, error) {
 	// so this is easier to read.
 
 	u, err := validateURL(c.URL)
-
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	ws, err := validateCSSSelector(c.WrapperSelector)
 
 	if err != nil {
 		errs = append(errs, err.Error())
@@ -90,7 +84,6 @@ func Validate(c RawConfig) (Config, error) {
 
 	return Config{
 		URL:             u,
-		WrapperSelector: ws,
 		ItemSelector:    is,
 		CaptionSelector: cs,
 		LinkSelector:    ls,
@@ -115,11 +108,11 @@ func validateURL(s string) (url.URL, error) {
 }
 
 // validateCSSSelector validates CSS selector strings
-func validateCSSSelector(s string) (css.SelectorGroup, error) {
+func validateCSSSelector(s string) (css.Selector, error) {
 	// Allowing groups of selectors since it's reasonable that a user
 	// would want to find links within multiple wrapper elements on
 	// the same website.
-	c, err := css.ParseGroupWithPseudoElements(s)
+	c, err := css.Compile(s)
 
 	if err != nil {
 		return nil, err

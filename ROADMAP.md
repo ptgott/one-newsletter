@@ -4,17 +4,23 @@
 
 ## For the MVP
 
-- Set up a Go module
+- Reduce the number of exported linksrc members. Keep the interface small!
+
+- Prevent missing config fields within `linksrc.Validate` (currently the test suite fails)
+
+- Fill in more of `doc.go` within `linksrc`
 
 - Grab HTML from user-selected sites at scheduled intervals
-
-- Parse HTML into lists of links (Use this library? https://github.com/PuerkitoBio/goquery)
 
 - Generate HTML to send as an email
 
 - Email lists of links to the user
 
 - Write e2e tests (also include profiles, which you can create using flags on the `go test` command)
+
+- Add log-based observability
+
+- **Releasing:** Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
 
 ## Possible features for after the MVP
 

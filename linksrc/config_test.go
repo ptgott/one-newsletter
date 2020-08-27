@@ -102,10 +102,11 @@ func TestValidateCSSSelector(t *testing.T) {
 			shouldBeValid: false,
 		},
 		testCase{
-			// Comma-separated groups of CSS selectors are valid in a browser,
-			// and should be valid here as well.
+			// Comma-separated groups of CSS selectors must not be valid here,
+			// since the parser needs to establish a hierarchy from individual list
+			// items to their captions, links, etc.
 			value:         "div,span",
-			shouldBeValid: true,
+			shouldBeValid: false,
 		},
 		testCase{
 			// Can't be blank
@@ -135,7 +136,6 @@ func TestValidate(t *testing.T) {
 		testCase{
 			value: RawConfig{
 				URL:             "http://www.example.com/path",
-				WrapperSelector: "div.wrapper",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "div.wrapper ul li a",
@@ -146,7 +146,6 @@ func TestValidate(t *testing.T) {
 		testCase{
 			value: RawConfig{
 				URL:             "example",
-				WrapperSelector: "div.wrapper",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "div.wrapper ul li a",
@@ -156,9 +155,8 @@ func TestValidate(t *testing.T) {
 		// Missing fields
 		testCase{
 			value: RawConfig{
-				URL:             "http://www.example.com/path",
-				WrapperSelector: "div.wrapper",
-				LinkSelector:    "div.wrapper ul li a",
+				URL:          "http://www.example.com/path",
+				LinkSelector: "div.wrapper ul li a",
 			},
 			shouldBeValid: false,
 		},
@@ -166,7 +164,6 @@ func TestValidate(t *testing.T) {
 		testCase{
 			value: RawConfig{
 				URL:             "http://www.example.com/path",
-				WrapperSelector: "123",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "div.wrapper ul li a",
@@ -177,7 +174,6 @@ func TestValidate(t *testing.T) {
 		testCase{
 			value: RawConfig{
 				URL:             "http://www.example.com/path",
-				WrapperSelector: "div.wrapper",
 				ItemSelector:    "123",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "div.wrapper ul li a",
@@ -188,7 +184,6 @@ func TestValidate(t *testing.T) {
 		testCase{
 			value: RawConfig{
 				URL:             "http://www.example.com/path",
-				WrapperSelector: "div.wrapper",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "456",
 				LinkSelector:    "div.wrapper ul li a",
@@ -199,7 +194,6 @@ func TestValidate(t *testing.T) {
 		testCase{
 			value: RawConfig{
 				URL:             "http://www.example.com/path",
-				WrapperSelector: "div.wrapper",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "1431",
