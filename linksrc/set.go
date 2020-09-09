@@ -1,21 +1,23 @@
 package linksrc
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"net/url"
-	"regexp"
+	"strings"
 
 	"golang.org/x/net/html"
+
+	css "github.com/andybalholm/cascadia"
 )
 
 // extractLinkURL returns the href attribute of HTML a elements.
 // It returns an error if n is not an a element.
-func extractLinkURL(n html.Node) (url.URL, error) {
+func extractLinkURL(n html.Node) (string, error) {
 
 	// Bail out early if the node is not a link.
 	if n.Data != "a" {
-		return url.URL{}, fmt.Errorf(
+		return "", fmt.Errorf(
 			"trying to extract a URL from a node that's not a link. Node data: %v",
 			n.Data,
 		)
@@ -30,17 +32,7 @@ func extractLinkURL(n html.Node) (url.URL, error) {
 		}
 	}
 
-	u, err := url.Parse(h)
-
-	if err != nil {
-		return url.URL{}, fmt.Errorf(
-			"could not extract a URL from node with data %v: %v",
-			n.Data,
-			err,
-		)
-	}
-
-	return *u, nil
+	return h, nil
 
 }
 
@@ -48,30 +40,38 @@ func extractLinkURL(n html.Node) (url.URL, error) {
 // Assumes that the text node is the first child of the HTML
 // node, and returns an error if the assumption isn't met.
 func extractText(n html.Node) (string, error) {
-	// We need to flag html.Node.Data attributes that are actually
-	// HTML tag names, since html.Node.Data is a tag name for HTML nodes,
-	// and the text itself for text nodes.
-	r, _ := regexp.Compile("^[a-z]+$") // Not expecting this to return an error.
-
 	// We're assuming that the first child node of the caption element
 	// will be a text node. The text node's Data contains its content.
 	// See: https://godoc.org/golang.org/x/net/html#Node
 	t := n.FirstChild.Data
 
-	// Unfortunately, there's no good way to distinguish the Data of an
-	// HTML element (a tag name like "div" or "span") from the Data of a
-	// legitimate text node, not least because you can give HTML tags
-	// arbitrary names. What we can do is return an error if the caption is a
-	// single, lowercased word, which is both likely to be an HTML tag and
-	// a really unhelpful caption in general.
-	if r.Match([]byte(t)) {
-		return "", fmt.Errorf(
-			"expecting a text node, but got a node with Data %v",
-			n.Data,
-		)
+	// For nodes that aren't text nodes, the html package
+	// seems to return an empty string
+	if strings.Trim(t, "\n\t ") == "" {
+		return "", errors.New("expected the parent of a text node, but could not find text")
 	}
 
 	return t, nil
+}
+
+// matchOne returns a single html.Node matching selector s.
+// It returns an error if there are multiple matches.
+// (This exists because there is no similar function in the
+// cascadia library.)
+func matchOne(s css.Selector, n *html.Node) (*html.Node, error) {
+
+	ns := s.MatchAll(n)
+
+	if len(ns) > 1 {
+		return &html.Node{}, fmt.Errorf("ambiguous selector: returned %v matches", len(ns))
+	}
+
+	if len(ns) == 0 {
+		return &html.Node{}, errors.New("found no matches")
+	}
+
+	return ns[0], nil // We know at this point that there must be a single match
+
 }
 
 // NewSet initializes a new collection of listed link items for an HTML
@@ -79,19 +79,38 @@ func extractText(n html.Node) (string, error) {
 func NewSet(r io.Reader, c Config) (Set, error) {
 	n, err := html.Parse(r)
 
+	// This is not likely to happen with a bad HTML document, since html.Parse
+	// is generous about arbitrary text as part of text node. It also seems to
+	// weather slices of arbitrary bites pretty well. This isn't covered by
+	// a test yet, but we're not worrying about that right now.
+	if err != nil {
+		return Set{}, err
+	}
+
+	conf, err := validate(c)
+
 	if err != nil {
 		return Set{}, err
 	}
 
 	// Get all items listing content to link to
-	ls := c.ItemSelector.MatchAll(n)
+	ls := conf.itemSelector.MatchAll(n)
 
 	v := make([]Meta, len(ls))
 
 	// Find the link URL and caption for each list item.
 	for i, li := range ls {
-		l := c.LinkSelector.MatchFirst(li)
-		p := c.CaptionSelector.MatchFirst(li)
+		l, err := matchOne(conf.linkSelector, li)
+
+		if err != nil {
+			return Set{}, err
+		}
+
+		p, err := matchOne(conf.captionSelector, li)
+
+		if err != nil {
+			return Set{}, err
+		}
 
 		u, err := extractLinkURL(*l)
 
@@ -126,6 +145,9 @@ type Set struct {
 
 // Meta represents data for a single link item
 type Meta struct {
-	LinkURL url.URL
+	// using a string here because we'll let the downstream context deal
+	// with parsing URLs etc. This comes from a website so we can't really
+	// trust it.
+	LinkURL string
 	Caption string
 }

@@ -1,7 +1,6 @@
 package linksrc
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -9,10 +8,10 @@ import (
 	css "github.com/andybalholm/cascadia"
 )
 
-// RawConfig stores options for the link source container. It's designed for
+// Config stores options for the link source container. It's designed for
 // parsing JSON sent and received across API boundaries, and could include
 // arbitrary user input!
-type RawConfig struct {
+type Config struct {
 	// URL of the site containing links
 	URL string `json:"url"`
 	// CSS selector for a link within a list of links
@@ -24,33 +23,55 @@ type RawConfig struct {
 	LinkSelector string `json:"linkSelector"`
 }
 
-// Config represents a validated configuration document fit for
+// config represents a validated configuration document fit for
 // consumption elsewhere in the application. There is no support
 // for grouped (i.e., comma-separated) selectors. This is because, while
 // grouped selectors are useful for applying styles to generalized sets of
 // elements, the HTML parser needs to locate elements individually.
-type Config struct {
-	// URL of the site containing links
-	URL url.URL
+// Since member types are specific to external packages used for
+// implementation, we should keep this unexported.
+type config struct {
+	// url of the site containing links
+	url url.URL
 	// CSS selector for a link within a list of links.
-	ItemSelector css.Selector
+	itemSelector css.Selector
 	// CSS selector for a caption within a link item.
 	// Relative to ItemSelector
-	CaptionSelector css.Selector
+	captionSelector css.Selector
 	// CSS selector for the actual link within a link item. Should be an
 	// "a" element. Relative to ItemSelector.
-	LinkSelector css.Selector
+	linkSelector css.Selector
+	// The original data used in creating the config
+	original Config
 }
 
-// Validate indicates whether a link source configuration is valid and
+// validate indicates whether a link source configuration is valid and
 // returns an error otherwise. Since it just returns one error, there
 // might be even more lurking unseen.
-func Validate(c RawConfig) (Config, error) {
+func validate(c Config) (config, error) {
 
+	// To make it faster/easier to edit invalid config docs, we'll
+	// try to return as many errors as we can in one go, rather than
+	// force callers to play the call-and-response game.
 	errs := []string{}
 
-	// TODO: Refactor all of the append statements into a function
-	// so this is easier to read.
+	// First, make sure all fields are accounted for. We'll use a map
+	// so we don't need to reflect.
+	fields := make(map[string]string)
+
+	fields["URL"] = c.URL
+	fields["ItemSelector"] = c.ItemSelector
+	fields["CaptionSelector"] = c.CaptionSelector
+	fields["LinkSelector"] = c.LinkSelector
+
+	for k, v := range fields {
+		if v == "" {
+			errs = append(errs, fmt.Errorf(
+				"the config does not provide a value for %v",
+				k,
+			).Error())
+		}
+	}
 
 	u, err := validateURL(c.URL)
 
@@ -76,17 +97,18 @@ func Validate(c RawConfig) (Config, error) {
 	}
 
 	if len(errs) > 0 {
-		return Config{}, fmt.Errorf(
+		return config{}, fmt.Errorf(
 			"The configuration was invalid. %v",
 			strings.Join(errs, ", "),
 		)
 	}
 
-	return Config{
-		URL:             u,
-		ItemSelector:    is,
-		CaptionSelector: cs,
-		LinkSelector:    ls,
+	return config{
+		url:             u,
+		itemSelector:    is,
+		captionSelector: cs,
+		linkSelector:    ls,
+		original:        c,
 	}, nil
 }
 
@@ -99,9 +121,15 @@ func validateURL(s string) (url.URL, error) {
 		return url.URL{}, err
 	}
 
-	// It's not a host/port, so we're probably looking at domain name.
+	// A URL like "http://#" will pass url.Parse despite being invalid.
+	// In this case, url.Parse returns a u.String() that ends in a colon,
+	// and a u.Scheme that doesn't.
+	if strings.Replace(u.String(), ":", "", 1) == u.Scheme {
+		return url.URL{}, fmt.Errorf("The URL %v is just a scheme", u.String())
+	}
+
 	if u.Scheme == "" {
-		return url.URL{}, errors.New("the URL should include a scheme")
+		return url.URL{}, fmt.Errorf("the URL %v should include a scheme", u.String())
 	}
 
 	return *u, nil

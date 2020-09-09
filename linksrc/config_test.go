@@ -50,6 +50,17 @@ func TestValidateURL(t *testing.T) {
 			value:         "",
 			shouldBeValid: false,
 		},
+		testCase{
+			// Just a hash with a scheme (definitely invalid but could
+			// seem valid to logic that just checks for schemes)
+			value:         "http://#",
+			shouldBeValid: false,
+		},
+		testCase{
+			// Can't include a space
+			value:         "http://www.example test.com",
+			shouldBeValid: false,
+		},
 	}
 
 	for _, tc := range cases {
@@ -102,11 +113,10 @@ func TestValidateCSSSelector(t *testing.T) {
 			shouldBeValid: false,
 		},
 		testCase{
-			// Comma-separated groups of CSS selectors must not be valid here,
-			// since the parser needs to establish a hierarchy from individual list
-			// items to their captions, links, etc.
+			// This will still be treated as a single CSS selector, rather
+			// than a group.
 			value:         "div,span",
-			shouldBeValid: false,
+			shouldBeValid: true,
 		},
 		testCase{
 			// Can't be blank
@@ -127,86 +137,77 @@ func TestValidateCSSSelector(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	type testCase struct {
-		value         RawConfig
+		value         Config
 		shouldBeValid bool
+		description   string // For logging
 	}
 
 	cases := []testCase{
-		// Canonical/valid case
 		testCase{
-			value: RawConfig{
+			value: Config{
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "div.wrapper ul li a",
 			},
 			shouldBeValid: true,
+			description:   "canonical/valid case",
 		},
-		// Invalid URL
 		testCase{
-			value: RawConfig{
+			value: Config{
 				URL:             "example",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "div.wrapper ul li a",
 			},
 			shouldBeValid: false,
+			description:   "invalid URL",
 		},
-		// Missing fields
 		testCase{
-			value: RawConfig{
+			value: Config{
 				URL:          "http://www.example.com/path",
 				LinkSelector: "div.wrapper ul li a",
 			},
 			shouldBeValid: false,
+			description:   "missing fields",
 		},
-		// Invalid WrapperSelector
 		testCase{
-			value: RawConfig{
-				URL:             "http://www.example.com/path",
-				ItemSelector:    "div.wrapper ul li",
-				CaptionSelector: "div.wrapper ul li span",
-				LinkSelector:    "div.wrapper ul li a",
-			},
-			shouldBeValid: false,
-		},
-		// Invalid ItemSelector
-		testCase{
-			value: RawConfig{
+			value: Config{
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "123",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "div.wrapper ul li a",
 			},
 			shouldBeValid: false,
+			description:   "invalid ItemSelector",
 		},
-		// Invalid CaptionSelector
 		testCase{
-			value: RawConfig{
+			value: Config{
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "456",
 				LinkSelector:    "div.wrapper ul li a",
 			},
 			shouldBeValid: false,
+			description:   "invalid CaptionSelector",
 		},
-		// Invalid LinkSelector
 		testCase{
-			value: RawConfig{
+			value: Config{
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
 				LinkSelector:    "1431",
 			},
 			shouldBeValid: false,
+			description:   "invalid LinkSelector",
 		},
 	}
 
 	for _, tc := range cases {
-		_, err := Validate(tc.value)
+		_, err := validate(tc.value)
 
 		if v := err == nil; v != tc.shouldBeValid {
-			t.Errorf("Unexpected validity status for %v\nWanted: %v\nGot: %v\nError: %v", tc.value, tc.shouldBeValid, v, err)
+			t.Errorf("Unexpected validity status for %v\nWanted: %v\nGot: %v\nError: %v", tc.description, tc.shouldBeValid, v, err)
 		}
 	}
 }
