@@ -4,7 +4,7 @@
 
 ## For the MVP
 
-- Generate HTML to send as an email
+- Generate HTML to send as an email. Group all link menus into as few emails as possible!
 
 - Grab HTML from user-selected sites at scheduled intervals. Write a new package for this. It will probably involve taking a raw `Config` struct and validating it into an internal config object, similar to the way `linksrc` works but tailored to grabbing HTML. Note that if we go this route, we'll need to extract `Config` from `linksrc`. Maybe add `Config` validation in a way that doesn't transform the `Config` into a struct with parsing-specific members (i.e., from the `cascadia` library etc)?
 
