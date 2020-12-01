@@ -6,6 +6,8 @@
 
 - Generate HTML to send as an email. Group all link menus into as few emails as possible!
 
+- Detect changes in link content against the previous scrape so we don't repeat content. We'll have access to a block storage volume to persist application state, though write an abstraction layer in case the method of storing data changes!
+
 - Grab HTML from user-selected sites at scheduled intervals. Write a new package for this. It will probably involve taking a raw `Config` struct and validating it into an internal config object, similar to the way `linksrc` works but tailored to grabbing HTML. Note that if we go this route, we'll need to extract `Config` from `linksrc`. Maybe add `Config` validation in a way that doesn't transform the `Config` into a struct with parsing-specific members (i.e., from the `cascadia` library etc)?
 
 - Fill in more of `doc.go` within `linksrc`
@@ -15,6 +17,8 @@
 - Write e2e tests (also include profiles, which you can create using flags on the `go test` command)
 
 - Add log-based observability
+
+- Add the ability to check items in online shops for price drops and email these along with newsletter links
 
 - **Releasing:** Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
 
