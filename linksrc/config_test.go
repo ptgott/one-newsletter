@@ -145,6 +145,7 @@ func TestValidate(t *testing.T) {
 	cases := []testCase{
 		testCase{
 			value: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
@@ -155,6 +156,7 @@ func TestValidate(t *testing.T) {
 		},
 		testCase{
 			value: Config{
+				Name:            "Example Site",
 				URL:             "example",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
@@ -165,14 +167,7 @@ func TestValidate(t *testing.T) {
 		},
 		testCase{
 			value: Config{
-				URL:          "http://www.example.com/path",
-				LinkSelector: "div.wrapper ul li a",
-			},
-			shouldBeValid: false,
-			description:   "missing fields",
-		},
-		testCase{
-			value: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "123",
 				CaptionSelector: "div.wrapper ul li span",
@@ -183,6 +178,7 @@ func TestValidate(t *testing.T) {
 		},
 		testCase{
 			value: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "456",
@@ -193,6 +189,7 @@ func TestValidate(t *testing.T) {
 		},
 		testCase{
 			value: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com/path",
 				ItemSelector:    "div.wrapper ul li",
 				CaptionSelector: "div.wrapper ul li span",
@@ -200,6 +197,56 @@ func TestValidate(t *testing.T) {
 			},
 			shouldBeValid: false,
 			description:   "invalid LinkSelector",
+		},
+		testCase{
+			value: Config{
+				URL:             "http://www.example.com/path",
+				ItemSelector:    "div.wrapper ul li",
+				CaptionSelector: "div.wrapper ul li span",
+				LinkSelector:    "div.wrapper ul li a",
+			},
+			shouldBeValid: false,
+			description:   "missing name",
+		},
+		testCase{
+			value: Config{
+				Name:            "Example Site",
+				ItemSelector:    "div.wrapper ul li",
+				CaptionSelector: "div.wrapper ul li span",
+				LinkSelector:    "div.wrapper ul li a",
+			},
+			shouldBeValid: false,
+			description:   "missing URL",
+		},
+		testCase{
+			value: Config{
+				Name:            "Example Site",
+				URL:             "http://www.example.com/path",
+				CaptionSelector: "div.wrapper ul li span",
+				LinkSelector:    "div.wrapper ul li a",
+			},
+			shouldBeValid: false,
+			description:   "missing item selector",
+		},
+		testCase{
+			value: Config{
+				Name:         "Example Site",
+				URL:          "http://www.example.com/path",
+				ItemSelector: "div.wrapper ul li",
+				LinkSelector: "div.wrapper ul li a",
+			},
+			shouldBeValid: false,
+			description:   "missing caption selector",
+		},
+		testCase{
+			value: Config{
+				Name:            "Example Site",
+				URL:             "http://www.example.com/path",
+				ItemSelector:    "div.wrapper ul li",
+				CaptionSelector: "div.wrapper ul li span",
+			},
+			shouldBeValid: false,
+			description:   "missing link selector",
 		},
 	}
 

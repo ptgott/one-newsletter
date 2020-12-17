@@ -12,6 +12,8 @@ import (
 // parsing JSON sent and received across API boundaries, and could include
 // arbitrary user input!
 type Config struct {
+	// The name of the source, e.g., "New York Magazine"
+	Name string `json:"name"`
 	// URL of the site containing links
 	URL string `json:"url"`
 	// CSS selector for a link within a list of links
@@ -31,6 +33,8 @@ type Config struct {
 // Since member types are specific to external packages used for
 // implementation, we should keep this unexported.
 type config struct {
+	// The name of the source, e.g., "New York Magazine"
+	name string
 	// url of the site containing links
 	url url.URL
 	// CSS selector for a link within a list of links.
@@ -41,8 +45,6 @@ type config struct {
 	// CSS selector for the actual link within a link item. Should be an
 	// "a" element. Relative to ItemSelector.
 	linkSelector css.Selector
-	// The original data used in creating the config
-	original Config
 }
 
 // validate indicates whether a link source configuration is valid and
@@ -63,6 +65,7 @@ func validate(c Config) (config, error) {
 	fields["ItemSelector"] = c.ItemSelector
 	fields["CaptionSelector"] = c.CaptionSelector
 	fields["LinkSelector"] = c.LinkSelector
+	fields["Name"] = c.Name
 
 	for k, v := range fields {
 		if v == "" {
@@ -108,7 +111,7 @@ func validate(c Config) (config, error) {
 		itemSelector:    is,
 		captionSelector: cs,
 		linkSelector:    ls,
-		original:        c,
+		name:            c.Name,
 	}, nil
 }
 

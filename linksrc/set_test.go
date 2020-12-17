@@ -66,6 +66,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "canonical/valid case",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com", // Not actually used here
 				ItemSelector:    "div#mostRead ul li",
 				CaptionSelector: "span span.itemName",
@@ -73,16 +74,17 @@ func TestNewSet(t *testing.T) {
 			},
 			isError: false,
 			expected: Set{
-				Items: []Meta{
-					Meta{
+				Name: "Example Site",
+				Items: []LinkItem{
+					LinkItem{
 						LinkURL: "www.example.com/stories/hot-take",
 						Caption: "This is a hot take!",
 					},
-					Meta{
+					LinkItem{
 						LinkURL: "www.example.com/stories/stuff-happened",
 						Caption: "Stuff happened today, yikes.",
 					},
-					Meta{
+					LinkItem{
 						LinkURL: "www.example.com/storiesreally-true",
 						Caption: "Is this supposition really true?",
 					},
@@ -92,6 +94,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "the LinkSelector doesn't match any elements",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com", // not used here,
 				ItemSelector:    "div#mostRead ul li",
 				CaptionSelector: "span span.itemName",
@@ -103,6 +106,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "the LinkSelector matches an element but not a link",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com", // not used here,
 				ItemSelector:    "div#mostRead ul li",
 				CaptionSelector: "span span.itemName",
@@ -114,6 +118,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "the CaptionSelector could match multiple elements",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com", // Not actually used here
 				ItemSelector:    "div#mostRead ul li",
 				CaptionSelector: "span",
@@ -125,6 +130,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "the CaptionSelector doesn't match the parent of a text node",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com", // Not actually used here
 				ItemSelector:    "div#mostRead ul li",
 				CaptionSelector: "span.itemHolder",
@@ -136,6 +142,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "the CaptionSelector ambiguously matches the parent of a text node",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com", // Not actually used here
 				ItemSelector:    "div#mostRead ul li",
 				CaptionSelector: "span span", // could match span.itemNumber or span.itemName
@@ -147,6 +154,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "the CaptionSelector doesn't match any elements",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "http://www.example.com", // Not actually used here
 				ItemSelector:    "div#mostRead ul li",
 				CaptionSelector: "p.caption",
@@ -158,6 +166,7 @@ func TestNewSet(t *testing.T) {
 		testCase{
 			description: "the Config is invalid",
 			config: Config{
+				Name:            "Example Site",
 				URL:             "blargh",
 				ItemSelector:    "???",
 				CaptionSelector: "!!!",
