@@ -63,7 +63,7 @@ func TestNewSet(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		testCase{
+		{
 			description: "canonical/valid case",
 			config: Config{
 				Name:            "Example Site",
@@ -76,22 +76,22 @@ func TestNewSet(t *testing.T) {
 			expected: Set{
 				Name: "Example Site",
 				Items: []LinkItem{
-					LinkItem{
+					{
 						LinkURL: "www.example.com/stories/hot-take",
 						Caption: "This is a hot take!",
 					},
-					LinkItem{
+					{
 						LinkURL: "www.example.com/stories/stuff-happened",
 						Caption: "Stuff happened today, yikes.",
 					},
-					LinkItem{
+					{
 						LinkURL: "www.example.com/storiesreally-true",
 						Caption: "Is this supposition really true?",
 					},
 				},
 			},
 		},
-		testCase{
+		{
 			description: "the LinkSelector doesn't match any elements",
 			config: Config{
 				Name:            "Example Site",
@@ -103,7 +103,7 @@ func TestNewSet(t *testing.T) {
 			isError:  true,
 			expected: Set{},
 		},
-		testCase{
+		{
 			description: "the LinkSelector matches an element but not a link",
 			config: Config{
 				Name:            "Example Site",
@@ -115,7 +115,7 @@ func TestNewSet(t *testing.T) {
 			isError:  true,
 			expected: Set{},
 		},
-		testCase{
+		{
 			description: "the CaptionSelector could match multiple elements",
 			config: Config{
 				Name:            "Example Site",
@@ -127,7 +127,7 @@ func TestNewSet(t *testing.T) {
 			isError:  true,
 			expected: Set{},
 		},
-		testCase{
+		{
 			description: "the CaptionSelector doesn't match the parent of a text node",
 			config: Config{
 				Name:            "Example Site",
@@ -139,7 +139,7 @@ func TestNewSet(t *testing.T) {
 			isError:  true,
 			expected: Set{},
 		},
-		testCase{
+		{
 			description: "the CaptionSelector ambiguously matches the parent of a text node",
 			config: Config{
 				Name:            "Example Site",
@@ -151,7 +151,7 @@ func TestNewSet(t *testing.T) {
 			isError:  true,
 			expected: Set{},
 		},
-		testCase{
+		{
 			description: "the CaptionSelector doesn't match any elements",
 			config: Config{
 				Name:            "Example Site",
@@ -163,7 +163,7 @@ func TestNewSet(t *testing.T) {
 			isError:  true,
 			expected: Set{},
 		},
-		testCase{
+		{
 			description: "the Config is invalid",
 			config: Config{
 				Name:            "Example Site",

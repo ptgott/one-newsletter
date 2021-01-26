@@ -17,9 +17,10 @@ While it won't be designed for managed services like Google Cloud Run or AWS Lam
 The application needs to:
 
 - Parse and validate configurations
-
 - Grab HTML from user-selected sites at scheduled intervals
-
 - Parse HTML into lists of links
-
 - Email lists of links to the user
+
+## Storage layer
+
+Uses BadgerDB

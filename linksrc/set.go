@@ -1,9 +1,14 @@
 package linksrc
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"divnews/storage"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -151,6 +156,101 @@ func NewSet(r io.Reader, c Config) (Set, error) {
 type Set struct {
 	Name  string // probably the publication the links came from
 	Items []LinkItem
+}
+
+// Serialize makes the Set suitable for writing to disk or comparing with
+// in-memory sets.
+func (s Set) Serialize() ([]byte, error) {
+	// One possibility was to store only a hash of the serialized Set, allowing
+	// us to check it against newly scraped Sets to see if an e-publication has
+	// changed its link menu. However, we need to retain the details of the Set
+	// so we can compare individual links with Sets that we have recently
+	// scraped. This way, we only have to email the user links that they haven't
+	// already seen.
+	return json.Marshal(s)
+}
+
+// IsTheSameAs indicates whether the Set has the same values/properties as
+// the serialized Set in d
+func (s Set) IsTheSameAs(d []byte) (bool, error) {
+
+	b, err := s.Serialize()
+
+	if err != nil {
+		return false, err
+	}
+
+	return bytes.Equal(b, d), nil
+
+}
+
+// NewSince returns a Set consisting of only the Items that are absent in
+// the other Set, which is intended to be from a previous scrape
+func (s Set) NewSince(other Set) (Set, error) {
+	s2 := s.SortItems()
+	other2 := other.SortItems()
+	var results []LinkItem
+
+	for i := range s2.Items {
+		n := sort.Search(len(other2.Items), func(i int) bool {
+			// We don't check captions since these might change from day to day
+			// as the publication changes its headlines etc. URLs, meanwhile,
+			// shouldn't change.
+			return other2.Items[i].LinkURL == s2.Items[i].LinkURL
+		})
+
+		// We can't find s2.Items[i] in other2.Items
+		if n == len(other2.Items) {
+			results = append(results, s2.Items[i])
+		}
+	}
+
+	return Set{
+		Name:  s.Name,
+		Items: results,
+	}, nil
+}
+
+// SortItems sorts the Items in a Set for comparison, returning a new sorted Set
+func (s Set) SortItems() Set {
+	// Copy s.Items so we can sort it in-place
+	newItems := make([]LinkItem, len(s.Items), len(s.Items))
+	for i := range s.Items {
+		newItems[i] = s.Items[i]
+	}
+
+	// Need stability since we'll have to sort by the link URL or caption, which
+	// can easily be the same length for multiple Items
+	sort.SliceStable(newItems, func(i, j int) bool {
+		return len(s.Items[i].Caption) < len(s.Items[j].Caption)
+	})
+
+	return Set{
+		Name:  s.Name,
+		Items: newItems,
+	}
+}
+
+// NewKVEntry prepares the Set to be saved in the KV database
+func (s Set) NewKVEntry() (storage.KVEntry, error) {
+
+	// We simply hash the Set's name to get the key. Collisions are most likely
+	// the result of grabbing content from an online publication we've checked
+	// previously, so we don't want to avoid these.
+	k := sha256.New()
+	k.Write([]byte(s.Name))
+
+	b, err := s.Serialize()
+
+	if err != nil {
+		return storage.KVEntry{}, err
+	}
+
+	return storage.KVEntry{
+		Key:   k.Sum(nil),
+		Value: b,
+	}, nil
+
 }
 
 // LinkItem represents data for a single link item found within a

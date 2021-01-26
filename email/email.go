@@ -29,6 +29,7 @@ type UserConfig struct {
 	Password     string
 	FromAddress  string
 	ToAddress    string
+	StoragePath  string // Directory where the database will write/read data
 }
 
 // NewSMTPClient validates user input and returns a Dialer
