@@ -100,7 +100,7 @@ func NewSet(r io.Reader, c Config) (Set, error) {
 	// for html.Parse.
 	n, _ := html.Parse(r)
 
-	conf, err := validate(c)
+	conf, err := c.parse()
 
 	if err != nil {
 		return Set{}, err

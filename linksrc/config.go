@@ -1,6 +1,7 @@
 package linksrc
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -13,16 +14,16 @@ import (
 // arbitrary user input!
 type Config struct {
 	// The name of the source, e.g., "New York Magazine"
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 	// URL of the site containing links
-	URL string `json:"url"`
+	URL string `json:"url" yaml:"url"`
 	// CSS selector for a link within a list of links
-	ItemSelector string `json:"itemSelector"`
+	ItemSelector string `json:"itemSelector" yaml:"itemSelector"`
 	// CSS selector for a caption, relative to ItemSelector
-	CaptionSelector string `json:"captionSelector"`
+	CaptionSelector string `json:"captionSelector" yaml:"captionSelector"`
 	// CSS selector for the actual link within a link item. Should be an
 	// "a" element. Relative to ItemSelector.
-	LinkSelector string `json:"linkSelector"`
+	LinkSelector string `json:"linkSelector" yaml:"linkSelector"`
 }
 
 // config represents a validated configuration document fit for
@@ -47,17 +48,16 @@ type config struct {
 	linkSelector css.Selector
 }
 
-// validate indicates whether a link source configuration is valid and
-// returns an error otherwise. Since it just returns one error, there
-// might be even more lurking unseen.
-func validate(c Config) (config, error) {
+// Validate indicates whether a link source configuration is valid and
+// returns an error otherwise
+func (c Config) Validate() error {
 
 	// To make it faster/easier to edit invalid config docs, we'll
 	// try to return as many errors as we can in one go, rather than
 	// force callers to play the call-and-response game.
 	errs := []string{}
 
-	// First, make sure all fields are accounted for. We'll use a map
+	// Make sure all fields are accounted for. We'll use a map
 	// so we don't need to reflect.
 	fields := make(map[string]string)
 
@@ -76,24 +76,35 @@ func validate(c Config) (config, error) {
 		}
 	}
 
-	u, err := validateURL(c.URL)
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, ", "))
+	}
+
+	return nil
+
+}
+
+func (c Config) parse() (config, error) {
+	var errs []string
+
+	u, err := parseURL(c.URL)
 
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
 
-	is, err := validateCSSSelector(c.ItemSelector)
+	is, err := parseCSSSelector(c.ItemSelector)
 
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
-	cs, err := validateCSSSelector(c.CaptionSelector)
+	cs, err := parseCSSSelector(c.CaptionSelector)
 
 	if err != nil {
 		errs = append(errs, err.Error())
 	}
 
-	ls, err := validateCSSSelector(c.LinkSelector)
+	ls, err := parseCSSSelector(c.LinkSelector)
 
 	if err != nil {
 		errs = append(errs, err.Error())
@@ -115,9 +126,9 @@ func validate(c Config) (config, error) {
 	}, nil
 }
 
-// validateURL validates a URL for the purpose of defining home pages for
+// parseURL parses a URL for the purpose of defining home pages for
 // link containers. We leave it to the caller to handle the validation errors.
-func validateURL(s string) (url.URL, error) {
+func parseURL(s string) (url.URL, error) {
 	u, err := url.Parse(s)
 
 	if err != nil {
@@ -138,8 +149,9 @@ func validateURL(s string) (url.URL, error) {
 	return *u, nil
 }
 
-// validateCSSSelector validates CSS selector strings
-func validateCSSSelector(s string) (css.Selector, error) {
+// parseCSSSelector CSS selector strings into a type that's
+// useful for locating HTML elements
+func parseCSSSelector(s string) (css.Selector, error) {
 	// Allowing groups of selectors since it's reasonable that a user
 	// would want to find links within multiple wrapper elements on
 	// the same website.

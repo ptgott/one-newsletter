@@ -65,10 +65,10 @@ func TestValidateURL(t *testing.T) {
 
 	for _, tc := range cases {
 
-		_, err := validateURL(tc.value)
+		_, err := parseURL(tc.value)
 
 		if v := err == nil; v != tc.shouldBeValid {
-			t.Errorf("Unexpected validity status for %v\nWanted: %v\nGot: %v\nError: %v", tc.value, tc.shouldBeValid, v, err)
+			t.Errorf("Unexpected error status for %v\nWanted: %v\nGot: %v\nError: %v", tc.value, tc.shouldBeValid, v, err)
 		}
 
 	}
@@ -126,10 +126,10 @@ func TestValidateCSSSelector(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		_, err := validateCSSSelector(tc.value)
+		_, err := parseCSSSelector(tc.value)
 
 		if v := err == nil; v != tc.shouldBeValid {
-			t.Errorf("Unexpected validity status for %v\nWanted: %v\nGot: %v\nError: %v", tc.value, tc.shouldBeValid, v, err)
+			t.Errorf("Unexpected error status for %v\nWanted: %v\nGot: %v\nError: %v", tc.value, tc.shouldBeValid, v, err)
 		}
 	}
 
@@ -251,7 +251,7 @@ func TestValidate(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		_, err := validate(tc.value)
+		err := tc.value.Validate()
 
 		if v := err == nil; v != tc.shouldBeValid {
 			t.Errorf("Unexpected validity status for %v\nWanted: %v\nGot: %v\nError: %v", tc.description, tc.shouldBeValid, v, err)

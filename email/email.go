@@ -22,14 +22,36 @@ const smtpScheme string = "smtp://"
 // which uses these.
 // https://golang.org/pkg/crypto/tls/#LoadX509KeyPair
 type UserConfig struct {
-	RelayAddress string
-	Key          []byte // PEM-encoded TLS key
-	Cert         []byte // PEM-encoded TLS cert
-	Username     string
-	Password     string
-	FromAddress  string
-	ToAddress    string
-	StoragePath  string // Directory where the database will write/read data
+	RelayAddress string `json:"relayAddress" yaml:"relayAddress"`
+	Key          []byte `json:"key" yaml:"key"`   // PEM-encoded TLS key
+	Cert         []byte `json:"cert" yaml:"cert"` // PEM-encoded TLS cert
+	Username     string `json:"username" yaml:"username"`
+	Password     string `json:"password" yaml:"password"`
+	FromAddress  string `json:"fromAddress" yaml:"fromAddress"`
+	ToAddress    string `json:"toAddress" yaml:"toAddress"`
+	StoragePath  string `json:"storagePath" yaml:"storagePath"` // Directory where the database will write/read data
+}
+
+// Validate returns an error if the UserConfig is invalid
+func (uc UserConfig) Validate() error {
+	// Ensure no fields are empty
+	f := make(map[string]bool)
+	f["SMTP relay address"] = uc.RelayAddress == ""
+	f["TLS key"] = uc.Key == nil
+	f["TLS cert"] = uc.Cert == nil
+	f["SMTP server username"] = uc.Username == ""
+	f["SMTP server password"] = uc.Password == ""
+	f["\"from\" adddress for sending email"] = uc.FromAddress == ""
+	f["\"to\" address for sending email"] = uc.ToAddress == ""
+	f["absolute path to the storage directory"] = uc.StoragePath == ""
+
+	for k, v := range f {
+		if v {
+			return fmt.Errorf("missing email configuration field: %v", k)
+		}
+	}
+
+	return nil
 }
 
 // NewSMTPClient validates user input and returns a Dialer
