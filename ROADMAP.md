@@ -6,9 +6,13 @@
 
 - Maybe retool the interface for `(sc *SMTPClient) Send(body string) error` in the `email` package. `Send()` both prepares an email and sends it using `dialer.DialAndSend(m)`. We can't--and don't need to--test `DialAndSend()`. Is there a way to use an interface that can allow for a test implementation of `DialAndSend()`?
 
-- Grab HTML from user-selected sites at scheduled intervals. Write a new package for this. It will probably involve taking a raw `Config` struct and validating it into an internal config object, similar to the way `linksrc` works but tailored to grabbing HTML. Note that if we go this route, we'll need to extract `Config` from `linksrc`. Maybe add `Config` validation in a way that doesn't transform the `Config` into a struct with parsing-specific members (i.e., from the `cascadia` library etc)?
+- Handle more complex client situations in `poller.Poll()`, such as retries and non-2xx responses. (Currently this has no defensive measures at all.)
+
+- Add a message to the newsletter email when a link source's structure has changed and causes the provided selectors to return zero results.
 
 - Ensure that interfaces between packages are as small as possible
+
+- Research some common web scraping pitfalls and ensure that this application avoids them.
 
 - Get to full unit test coverage
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"divnews/email"
 	"divnews/linksrc"
+	"divnews/poller"
 	"fmt"
 	"io"
 
@@ -15,6 +16,7 @@ import (
 type Meta struct {
 	EmailSettings email.UserConfig
 	LinkSources   []linksrc.Config
+	PollSettings  poller.Config
 }
 
 // Parse generates usable configurations from possibly arbitrary user input.
@@ -73,6 +75,11 @@ func validate(m Meta) error {
 		if err = ls.Validate(); err != nil {
 			return fmt.Errorf("invalid link source config: %v", err)
 		}
+	}
+
+	err = m.PollSettings.Validate()
+	if err != nil {
+		return fmt.Errorf("invalid settings for the website poller: %v", err)
 	}
 
 	return nil
