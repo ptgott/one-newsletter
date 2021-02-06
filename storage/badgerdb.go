@@ -16,10 +16,10 @@ type BadgerDB struct {
 
 // NewBadgerDB initializes the BadgerDB embedded database. It is up to the
 // caller to close the database with Close().
-func NewBadgerDB(dirPath string, dur time.Duration) (*BadgerDB, error) {
+func NewBadgerDB(conf KVConfig) (*BadgerDB, error) {
 	// Open the Badger database at dirPath.
 	// See: https://dgraph.io/docs/badger/get-started/#opening-a-database
-	db, err := badger.Open(badger.DefaultOptions(dirPath))
+	db, err := badger.Open(badger.DefaultOptions(conf.StorageDirPath))
 
 	if err != nil {
 		return &BadgerDB{}, fmt.Errorf("can't open the db connection: %v", err)
@@ -27,7 +27,7 @@ func NewBadgerDB(dirPath string, dur time.Duration) (*BadgerDB, error) {
 
 	return &BadgerDB{
 		connection: db,
-		keyTTL:     dur,
+		keyTTL:     conf.KeyTTLDuration,
 	}, nil
 }
 
@@ -77,26 +77,31 @@ func (db *BadgerDB) Read(key []byte) (KVEntry, error) {
 	}, nil
 }
 
-// Delete removes a BadgerDB entry by key. Keys are SHA256 hashes of a Set.Name
-func (db *BadgerDB) Delete(key []byte) error {
-	err := db.connection.Update(func(txn *badger.Txn) error {
-		err := txn.Delete(key)
-		if err != nil {
-			return fmt.Errorf("could not delete the given key: %v", err)
-		}
+// Cleanup performs BadgerDB's garbage collection routine with the
+// recommended discardRatio.
+//
+// See: https://pkg.go.dev/github.com/ipsn/go-ipfs/gxlibs/github.com/dgraph-io/badger#DB.RunValueLogGC
+//
+// This is the only time old records are actually removed, so make sure you're
+// setting TTLs for records!
+func (db *BadgerDB) Cleanup() error {
+	var discardRatio float64 = .5
+	err := db.connection.RunValueLogGC(discardRatio)
+	// If the GC determines that it can't rewrite anything, don't worry the
+	// caller--just skip it
+	if err.Error() == badger.ErrNoRewrite.Error() {
 		return nil
-	})
+	}
 	if err != nil {
-		return fmt.Errorf("could not complete delete transaction: %v", err)
+		return err
 	}
 	return nil
 }
 
 // Close tears down the database connection. You should defer this.
-func (db *BadgerDB) Close() error {
+func (db *BadgerDB) Close() {
 	err := db.connection.Close()
 	if err != nil {
-		return fmt.Errorf("could not close the database: %v", err)
+		panic(fmt.Sprintf("could not close the database: %v", err))
 	}
-	return nil
 }

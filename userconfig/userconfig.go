@@ -5,6 +5,7 @@ import (
 	"divnews/email"
 	"divnews/linksrc"
 	"divnews/poller"
+	"divnews/storage"
 	"fmt"
 	"io"
 
@@ -14,9 +15,10 @@ import (
 // Meta represents all current config options that the application can use,
 // i.e., after validation and parsing
 type Meta struct {
-	EmailSettings email.UserConfig
-	LinkSources   []linksrc.Config
-	PollSettings  poller.Config
+	EmailSettings   email.UserConfig `yaml:"email" json:"email"`
+	LinkSources     []linksrc.Config `yaml:"link_sources" json:"link_sources"`
+	PollSettings    poller.Config    `yaml:"polling" json:"polling"`
+	StorageSettings storage.KVConfig `yaml:"storage" json:"storage"`
 }
 
 // Parse generates usable configurations from possibly arbitrary user input.

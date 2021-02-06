@@ -17,32 +17,32 @@ const relativeGoldenFilePath string = "golden-email-body.html"
 func TestGenerateBody(t *testing.T) {
 
 	ed := EmailData{
-		LinkSets: []linksrc.Set{
-			linksrc.Set{
+		linkSets: []linksrc.Set{
+			{
 				Name: "Example Site 1",
 				Items: []linksrc.LinkItem{
-					linksrc.LinkItem{
+					{
 						LinkURL: "www.example.com/stories/hot-take",
 						Caption: "This is a hot take!",
 					},
-					linksrc.LinkItem{
+					{
 						LinkURL: "www.example.com/stories/stuff-happened",
 						Caption: "Stuff happened today, yikes.",
 					},
-					linksrc.LinkItem{
+					{
 						LinkURL: "www.example.com/storiesreally-true",
 						Caption: "Is this supposition really true?",
 					},
 				},
 			},
-			linksrc.Set{
+			{
 				Name: "Example Site 2",
 				Items: []linksrc.LinkItem{
-					linksrc.LinkItem{
+					{
 						LinkURL: "www.example.com/stories/tragedy",
 						Caption: "This was a tragedy",
 					},
-					linksrc.LinkItem{
+					{
 						LinkURL: "www.example.com/stories/heartfelt",
 						Caption: "This story is heartfelt",
 					},

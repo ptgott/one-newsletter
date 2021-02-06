@@ -21,6 +21,9 @@ The application needs to:
 - Parse HTML into lists of links
 - Email lists of links to the user
 
-## Storage layer
+### Storage layer
 
 Uses BadgerDB
+
+## Testing
+For end-to-end tests, you need to have MailHog installed. Create a JSON file called **e2e_config.json** at the root of this directory. Include the absolute path to MailHog in the `mailhog_path` key.

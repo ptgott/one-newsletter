@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"divnews/linksrc"
 	"html/template"
+	"sync"
 )
 
 // Template meant to be populated with an EmailData.
@@ -29,15 +30,30 @@ const emailBodyHTML = `<html>
 </html>`
 
 // EmailData contains metadata for the body of an email to send
-// with a newsletter etc.
+// with a newsletter etc. Since each linksrc.Set in linksets
+// comes from a different upstream, this is designed to support
+// concurrent access.
 type EmailData struct {
-	LinkSets []linksrc.Set
+	linkSets []linksrc.Set // These must not be written to directly
+	mtx      sync.Mutex
+}
+
+// Add stores a new linksrc.Set in the EmailData in a
+// goroutine-safe way. Callers must use Add for adding
+// linksrc.Sets to the EmailData.
+func (ed *EmailData) Add(s linksrc.Set) {
+	ed.mtx.Lock()
+	defer ed.mtx.Unlock()
+
+	ed.linkSets = append(ed.linkSets, s)
 }
 
 // GenerateBody produces an email body to send based on the unformatted
 // content. It's meant to include multiple sources of links in the same
 // email to reduce the number of emails we send.
-func (ed EmailData) GenerateBody() (string, error) {
+func (ed *EmailData) GenerateBody() (string, error) {
+	ed.mtx.Lock()
+	defer ed.mtx.Unlock()
 
 	var buf bytes.Buffer
 

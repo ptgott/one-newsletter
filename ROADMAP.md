@@ -4,13 +4,15 @@
 
 ## For the MVP (in order)
 
-1. Write e2e tests while refining the interfaces between packages as well as the glue code in `main.go`. Ensure that interfaces between packages are as small as possible.
+1. Add log-based observability (replace `mft.Println/Printf` statements)
 
-1. Add log-based observability
+1. Get the existing e2e test to pass
 
 1. Get to full unit test coverage
 
 1. Handle more complex client situations in `poller.Poll()`, such as retries and non-2xx responses. (Currently this has no defensive measures at all.)
+
+1. When closing a BadgerDB instance, the current approach doesn't return an error--making this easier to use with defer--but also panics instead of handling the error. Consider an alternative approach, or maybe retries.
 
 1. Add a message to the newsletter email when a link source's structure has changed and causes the provided selectors to return zero results.
 
@@ -21,5 +23,7 @@
 1. Update the README to describe the architecture of the application (what each package does and how they work together).
 
 1. Make sure there's an adequate `doc.go` for every package.
+
+1. Consider vendoring dependencies.
 
 1. **Releasing:** Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.

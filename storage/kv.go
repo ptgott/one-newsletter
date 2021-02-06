@@ -1,5 +1,14 @@
 package storage
 
+import "time"
+
+// KVConfig contains settings specific to BadgerDB connections
+type KVConfig struct {
+	StorageDirPath  string        `yaml:"storageDir" json:"storageDir"`
+	KeyTTLDuration  time.Duration `yaml:"keyTTL" json:"keyTTL"`
+	CleanupInterval time.Duration `yaml:"cleanupInterval" json:"CleanupInterval"`
+}
+
 // KeyValue exposes a common interface for performing CRUD operations on an
 // underlying storage layer. Assumes some kind of persistent KV store
 // for linksrc.Sets.
@@ -11,8 +20,9 @@ type KeyValue interface {
 	Put(KVEntry) error
 	// Return a Set given its key
 	Read(key []byte) (KVEntry, error)
-	// Remove a Set permanently from storage
-	Delete(key []byte) error
+	// Cleanup performs routine deletion of old records. We assign
+	// TTLs to KV pairs and delete them periodically.
+	Cleanup() error
 	// Drain/tear down the connection, or something analogous for
 	// an embedded database
 	Close() error

@@ -36,7 +36,6 @@ type UserConfig struct {
 	Password     string `json:"password" yaml:"password"`
 	FromAddress  string `json:"fromAddress" yaml:"fromAddress"`
 	ToAddress    string `json:"toAddress" yaml:"toAddress"`
-	StoragePath  string `json:"storagePath" yaml:"storagePath"` // Directory where the database will write/read data
 }
 
 // Validate returns an error if the UserConfig is invalid
@@ -50,7 +49,6 @@ func (uc UserConfig) Validate() error {
 	f["SMTP server password"] = uc.Password == ""
 	f["\"from\" adddress for sending email"] = uc.FromAddress == ""
 	f["\"to\" address for sending email"] = uc.ToAddress == ""
-	f["absolute path to the storage directory"] = uc.StoragePath == ""
 
 	for k, v := range f {
 		if v {

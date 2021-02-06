@@ -1,7 +1,6 @@
 package linksrc
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"divnews/storage"
 	"encoding/json"
@@ -158,9 +157,9 @@ type Set struct {
 	Items []LinkItem
 }
 
-// Serialize makes the Set suitable for writing to disk or comparing with
+// serialize makes the Set suitable for writing to disk or comparing with
 // in-memory sets.
-func (s Set) Serialize() ([]byte, error) {
+func (s Set) serialize() ([]byte, error) {
 	// One possibility was to store only a hash of the serialized Set, allowing
 	// us to check it against newly scraped Sets to see if an e-publication has
 	// changed its link menu. However, we need to retain the details of the Set
@@ -170,25 +169,11 @@ func (s Set) Serialize() ([]byte, error) {
 	return json.Marshal(s)
 }
 
-// IsTheSameAs indicates whether the Set has the same values/properties as
-// the serialized Set in d
-func (s Set) IsTheSameAs(d []byte) (bool, error) {
-
-	b, err := s.Serialize()
-
-	if err != nil {
-		return false, err
-	}
-
-	return bytes.Equal(b, d), nil
-
-}
-
 // NewSince returns a Set consisting of only the Items that are absent in
 // the other Set, which is intended to be from a previous scrape
 func (s Set) NewSince(other Set) (Set, error) {
-	s2 := s.SortItems()
-	other2 := other.SortItems()
+	s2 := s.sortItems()
+	other2 := other.sortItems()
 	var results []LinkItem
 
 	for i := range s2.Items {
@@ -211,8 +196,8 @@ func (s Set) NewSince(other Set) (Set, error) {
 	}, nil
 }
 
-// SortItems sorts the Items in a Set for comparison, returning a new sorted Set
-func (s Set) SortItems() Set {
+// sortItems sorts the Items in a Set for comparison, returning a new sorted Set
+func (s Set) sortItems() Set {
 	// Copy s.Items so we can sort it in-place
 	newItems := make([]LinkItem, len(s.Items), len(s.Items))
 	for i := range s.Items {
@@ -240,7 +225,7 @@ func (s Set) NewKVEntry() (storage.KVEntry, error) {
 	k := sha256.New()
 	k.Write([]byte(s.Name))
 
-	b, err := s.Serialize()
+	b, err := s.serialize()
 
 	if err != nil {
 		return storage.KVEntry{}, err
@@ -251,6 +236,22 @@ func (s Set) NewKVEntry() (storage.KVEntry, error) {
 		Value: b,
 	}, nil
 
+}
+
+// Deserialize transforms a KV store entry, which has a binary key and value,
+// into a format that lets us access a Set's links. An error likely means that
+// the Set fields have changed since the Set was written to the database.
+func Deserialize(kve storage.KVEntry) (Set, error) {
+	var s Set
+	err := json.Unmarshal(kve.Value, &s)
+
+	if err != nil {
+		return Set{}, fmt.Errorf(
+			"couldn't deserialize a Set from the key/value entry: %v", err,
+		)
+	}
+
+	return s, nil
 }
 
 // LinkItem represents data for a single link item found within a
