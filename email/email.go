@@ -13,6 +13,13 @@ import (
 
 const smtpScheme string = "smtp://"
 
+// dialAndSender generalizes the interface for dialing an SMTP server and
+// sending email so we don't need to test already hardened parts of the gomail
+// package in order to test our email sending logic
+type dialAndSender interface {
+	DialAndSend(...*gomail.Message) error
+}
+
 // UserConfig represents config options provided by
 // the user. Not meant to be used directly for sending
 // email without validation.
@@ -52,6 +59,13 @@ func (uc UserConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// SMTPClient handles interactions with the local SMTP server
+type SMTPClient struct {
+	dialer      dialAndSender
+	FromAddress string
+	ToAddress   string
 }
 
 // NewSMTPClient validates user input and returns a Dialer
@@ -107,23 +121,18 @@ func NewSMTPClient(uc UserConfig) (*SMTPClient, error) {
 	return &SMTPClient{
 		FromAddress: uc.FromAddress,
 		ToAddress:   uc.ToAddress,
-		dialer: gomail.Dialer{
+		dialer: &gomail.Dialer{
 			Host:      u.Hostname(),
 			Port:      p,
 			Username:  uc.Username,
 			Password:  uc.Password,
+			Auth:      nil,
 			SSL:       true,
 			TLSConfig: &tlsc,
+			LocalName: "",
 		},
 	}, nil
 
-}
-
-// SMTPClient handles interactions with the local SMTP server
-type SMTPClient struct {
-	dialer      gomail.Dialer
-	FromAddress string
-	ToAddress   string
 }
 
 // Send sends the HTML message in body to the local SMTP server. A lack of an
