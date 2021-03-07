@@ -14,12 +14,19 @@ import (
 //
 // Fields are exported so we can use them in templates.
 type appConfigOptions struct {
-	RelayAddress   string
-	SSLKey         string
-	SSLCert        string
-	LinkSourceURLs []string
-	StorageDir     string
-	PollInterval   string
+	SMTPServerAddress string
+	LinkSources       []mockLinksrcInfo
+	StorageDir        string
+	PollInterval      string
+}
+
+// mockLinksrcInfo contains metadata about test HTTP servers so we can use it
+// to configure scraping targets for the application within a test environment.
+//
+// Fields are exported so we can use them in templates.
+type mockLinksrcInfo struct {
+	URL  string
+	Name string
 }
 
 // createAppConfig writes a configuration YAML doc to the given path.
@@ -27,27 +34,23 @@ type appConfigOptions struct {
 func createAppConfig(path string, opts appConfigOptions) error {
 	configTemplate := `---
 email:
-	relayAddress: {{ .RelayAddress }}
-	key: {{ .SSLKey }}
-	cert: {{ .SSLCert }}
-	username: myuser123
-	password: myuser123
-	fromAddress: mynewsletter@example.com
-	toAddress: recipient@example.com
+    smtpServerAddress: {{ .SMTPServerAddress }}
+    fromAddress: mynewsletter@example.com
+    toAddress: recipient@example.com
 link_sources:
-{{ range .LinkSourceURLs }}
-	- name: publication-at-{{- . -}}
-	url: .
-	itemSelector: "ul li"
-	captionSelector: "p"
-	linkSelector: "a"
+{{ range .LinkSources }}
+    - name: {{ .Name }}
+      url: {{ .URL }}
+      itemSelector: "ul li"
+      captionSelector: "p"
+      linkSelector: "a"
 {{ end }}
 polling:
-	interval: {{ .PollInterval }}
+    interval: {{ .PollInterval }}
 storage:
-	storageDir: {{ .StorageDir }}
-	keyTTL: "1y"
-	cleanupInterval: "10m"
+    storageDir: {{ .StorageDir }}
+    keyTTL: "168h"
+    cleanupInterval: "10m"
 `
 
 	tmpl, err := template.New("conf").Parse(configTemplate)

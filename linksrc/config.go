@@ -14,16 +14,16 @@ import (
 // arbitrary user input!
 type Config struct {
 	// The name of the source, e.g., "New York Magazine"
-	Name string `json:"name" yaml:"name"`
+	Name string `yaml:"name"`
 	// URL of the site containing links
-	URL string `json:"url" yaml:"url"`
+	URL string `yaml:"url"`
 	// CSS selector for a link within a list of links
-	ItemSelector string `json:"itemSelector" yaml:"itemSelector"`
+	ItemSelector string `yaml:"itemSelector"`
 	// CSS selector for a caption, relative to ItemSelector
-	CaptionSelector string `json:"captionSelector" yaml:"captionSelector"`
+	CaptionSelector string `yaml:"captionSelector"`
 	// CSS selector for the actual link within a link item. Should be an
 	// "a" element. Relative to ItemSelector.
-	LinkSelector string `json:"linkSelector" yaml:"linkSelector"`
+	LinkSelector string `yaml:"linkSelector"`
 }
 
 // config represents a validated configuration document fit for

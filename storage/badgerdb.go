@@ -16,7 +16,7 @@ type BadgerDB struct {
 
 // NewBadgerDB initializes the BadgerDB embedded database. It is up to the
 // caller to close the database with Close().
-func NewBadgerDB(conf KVConfig) (*BadgerDB, error) {
+func NewBadgerDB(conf *KVConfig) (*BadgerDB, error) {
 	// Open the Badger database at dirPath.
 	// See: https://dgraph.io/docs/badger/get-started/#opening-a-database
 	db, err := badger.Open(badger.DefaultOptions(conf.StorageDirPath))
@@ -47,7 +47,7 @@ func (db *BadgerDB) Put(entry KVEntry) error {
 	return nil
 }
 
-// Read returns an entry by key. Keys are SHA256 hashes of a Set.Name
+// Read returns an entry by key.
 func (db *BadgerDB) Read(key []byte) (KVEntry, error) {
 	var val []byte
 	// See: https://dgraph.io/docs/badger/get-started/#read-only-transactions

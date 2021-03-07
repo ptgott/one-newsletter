@@ -1,9 +1,8 @@
 package linksrc
 
 import (
-	"io"
+	"bytes"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -178,7 +177,7 @@ func TestNewSet(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		r := io.Reader(strings.NewReader(testHTML))
+		r := bytes.NewBuffer([]byte(testHTML))
 		st, err := NewSet(r, tc.config)
 
 		if (err != nil) != tc.isError {

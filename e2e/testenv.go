@@ -18,7 +18,9 @@ type testEnvironmentConfig struct {
 	numHTTPServers int // How many mock web publications to spin up
 	numLinks       int //How many links this application should be able to scrape from
 	// each web publication
-	mailHogPath string // abs path to MailHog
+	mailHogPath     string // abs path to MailHog
+	mailHogSMTPPort int
+	mailHogHTTPPort int
 }
 
 // testEnvironment manages all dependencies required to simulate a "real"
@@ -50,8 +52,8 @@ func startTestEnvironment(c testEnvironmentConfig) (*testEnvironment, error) {
 
 	ts := &MailHog{
 		mailHogPath: c.mailHogPath,
-		smtpPort:    123,
-		apiPort:     456,
+		smtpPort:    c.mailHogSMTPPort,
+		apiPort:     c.mailHogHTTPPort,
 	}
 
 	te.testSMTPServer = ts

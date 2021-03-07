@@ -1,13 +1,10 @@
 package linksrc
 
 import (
-	"crypto/sha256"
 	"divnews/storage"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -157,109 +154,21 @@ type Set struct {
 	Items []LinkItem
 }
 
-// serialize makes the Set suitable for writing to disk or comparing with
-// in-memory sets.
-func (s Set) serialize() ([]byte, error) {
-	// One possibility was to store only a hash of the serialized Set, allowing
-	// us to check it against newly scraped Sets to see if an e-publication has
-	// changed its link menu. However, we need to retain the details of the Set
-	// so we can compare individual links with Sets that we have recently
-	// scraped. This way, we only have to email the user links that they haven't
-	// already seen.
-	return json.Marshal(s)
-}
-
-// NewSince returns a Set consisting of only the Items that are absent in
-// the other Set, which is intended to be from a previous scrape
-func (s Set) NewSince(other Set) (Set, error) {
-	s2 := s.sortItems()
-	other2 := other.sortItems()
+// NewSince returns a Set consisting of only the LinkItems that we haven't yet
+// stored in the database, which we're assuming are new to the Web.
+func (s Set) NewItems(db *storage.BadgerDB) Set {
 	var results []LinkItem
 
-	for i := range s2.Items {
-		n := sort.Search(len(other2.Items), func(i int) bool {
-			// We don't check captions since these might change from day to day
-			// as the publication changes its headlines etc. URLs, meanwhile,
-			// shouldn't change.
-			return other2.Items[i].LinkURL == s2.Items[i].LinkURL
-		})
-
-		// We can't find s2.Items[i] in other2.Items
-		if n == len(other2.Items) {
-			results = append(results, s2.Items[i])
+	for _, item := range s.Items {
+		// The LinkItem isn't in the database--it must be new, so use it!
+		_, err := db.Read(item.Key())
+		if err != nil {
+			results = append(results, item)
 		}
 	}
 
 	return Set{
 		Name:  s.Name,
 		Items: results,
-	}, nil
-}
-
-// sortItems sorts the Items in a Set for comparison, returning a new sorted Set
-func (s Set) sortItems() Set {
-	// Copy s.Items so we can sort it in-place
-	newItems := make([]LinkItem, len(s.Items), len(s.Items))
-	for i := range s.Items {
-		newItems[i] = s.Items[i]
 	}
-
-	// Need stability since we'll have to sort by the link URL or caption, which
-	// can easily be the same length for multiple Items
-	sort.SliceStable(newItems, func(i, j int) bool {
-		return len(s.Items[i].Caption) < len(s.Items[j].Caption)
-	})
-
-	return Set{
-		Name:  s.Name,
-		Items: newItems,
-	}
-}
-
-// NewKVEntry prepares the Set to be saved in the KV database
-func (s Set) NewKVEntry() (storage.KVEntry, error) {
-
-	// We simply hash the Set's name to get the key. Collisions are most likely
-	// the result of grabbing content from an online publication we've checked
-	// previously, so we don't want to avoid these.
-	k := sha256.New()
-	k.Write([]byte(s.Name))
-
-	b, err := s.serialize()
-
-	if err != nil {
-		return storage.KVEntry{}, err
-	}
-
-	return storage.KVEntry{
-		Key:   k.Sum(nil),
-		Value: b,
-	}, nil
-
-}
-
-// Deserialize transforms a KV store entry, which has a binary key and value,
-// into a format that lets us access a Set's links. An error likely means that
-// the Set fields have changed since the Set was written to the database.
-func Deserialize(kve storage.KVEntry) (Set, error) {
-	var s Set
-	err := json.Unmarshal(kve.Value, &s)
-
-	if err != nil {
-		return Set{}, fmt.Errorf(
-			"couldn't deserialize a Set from the key/value entry: %v", err,
-		)
-	}
-
-	return s, nil
-}
-
-// LinkItem represents data for a single link item found within a
-// list of links
-type LinkItem struct {
-	// using a string here because we'll let the downstream context deal
-	// with parsing URLs etc. This comes from a website so we can't really
-	// trust it.
-	LinkURL string
-	Caption string
 }

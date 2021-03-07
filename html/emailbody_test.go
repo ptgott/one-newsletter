@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"divnews/linksrc"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -98,4 +99,36 @@ func TestGenerateBody(t *testing.T) {
 		t.Errorf("the HTML generated from GenerateBody does not match the golden file at %v", relativeGoldenFilePath)
 	}
 
+}
+
+func TestGenerateEmptyBody(t *testing.T) {
+	s := []linksrc.Set{}
+	ed := EmailData{
+		linkSets: s,
+		mtx:      &sync.Mutex{},
+	}
+	_, err := ed.GenerateBody()
+
+	if err == nil {
+		t.Error(
+			"attempted to generate an email out of an empty data set with no error",
+		)
+	}
+}
+
+func TestAdd(t *testing.T) {
+	ed := NewEmailData()
+	ed.Add(linksrc.Set{
+		Name: "My Magazine",
+		Items: []linksrc.LinkItem{
+			{
+				LinkURL: "http://www.example.com",
+				Caption: "Something happened!",
+			},
+		},
+	})
+
+	if len(ed.linkSets) != 1 {
+		t.Error("could not add to the EmailData")
+	}
 }

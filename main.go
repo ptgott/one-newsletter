@@ -9,6 +9,7 @@ import (
 	"divnews/userconfig"
 	"flag"
 	"os"
+	"os/signal"
 	"sync"
 	"time"
 
@@ -16,8 +17,22 @@ import (
 )
 
 func main() {
-	// Log with filename and line number
+	// Log with filename and line number. This writes to stderr, so it should
+	// be thread safe.
+	// https://github.com/rs/zerolog/blob/7ccd4c940bf8a02fcc5f10e5475f9d3daff04d57/log/log.go#L13
 	log.Logger = log.With().Caller().Logger()
+
+	// Intercept interrupts so we can get more visibility into them.
+	// One goroutine listens exclusively for interrupts so we can
+	// handle them before the main application loop in case of
+	// setup issues.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+	go func(c chan os.Signal) {
+		<-sigCh
+		log.Info().Msg("interrupt: exiting")
+		os.Exit(0)
+	}(sigCh)
 
 	configPath := flag.String(
 		"config",
@@ -27,7 +42,7 @@ func main() {
 	flag.Parse()
 
 	log.Info().
-		Str("config-path", *configPath).
+		Str("configPath", *configPath).
 		Msg("starting the application")
 
 	f, err := os.Open(*configPath)
@@ -49,17 +64,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	c, err := email.NewSMTPClient(config.EmailSettings)
+	log.Info().Str("configPath", *configPath).Msg("successfully validated the config")
+
+	smtpCl, err := email.NewSMTPClient(config.EmailSettings)
 	if err != nil {
 		log.Error().
 			Err(err).
 			Msg("Problem setting up the email client")
 		os.Exit(1)
 	}
+	log.Info().Msg("set up the SMTP client successfully")
 
-	var emailCh chan string // email bodies to send
-	var errCh chan error
-	var storeCh chan storage.KVEntry
+	errCh := make(chan error) // errors to print
+
 	var httpClient poller.Client
 	scrapeCadence := time.NewTicker(config.PollSettings.Interval)
 	cleanupCadence := time.NewTicker(config.StorageSettings.CleanupInterval)
@@ -72,83 +89,92 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	log.Info().Msg("set up the database connection successfully")
 
-	select {
-	case bod := <-emailCh:
-		err = c.Send(bod)
-		if err != nil {
-			errCh <- err
-			return
-		}
-	case <-scrapeCadence.C:
-		var wg sync.WaitGroup
-		var d html.EmailData
-		wg.Add(len(config.LinkSources))
-		for _, ls := range config.LinkSources {
-			// TODO: Consider extracting this
-			go func(lc linksrc.Config, wg *sync.WaitGroup) {
-				defer wg.Done()
-				r, err := httpClient.Poll(lc.URL)
-				if err != nil {
-					errCh <- err
-					return
-				}
-				s, err := linksrc.NewSet(r, lc)
-				if err != nil {
-					errCh <- err
-					return
-				}
+	for {
+		select {
+		case <-scrapeCadence.C:
+			log.Info().
+				Int("count", len(config.LinkSources)).
+				Msg("launching scrapers")
+			var wg sync.WaitGroup
+			d := html.NewEmailData()
 
-				latest, err := s.NewKVEntry()
-				if err != nil {
-					errCh <- err
-					return
-				}
-
-				// Send latest to storeCh before diffing with an earlier
-				// iteration. This shouldn't matter for subsequent iterations.
-				storeCh <- latest
-
-				earlier, err := db.Read(latest.Key)
-
-				// Skip the comparison if there's no earlier Set for this key
-				if err == nil {
-					// TODO: The if statements in this block need to break somehow!
-					olds, err := linksrc.Deserialize(earlier)
-					// Log the error for observation but move on, since we can
-					// ignore the earlier Set
+			// buffer the results of the latest scrape so we can perform a diff
+			// with the previous scrape and build an email body
+			emailBuildCh := make(chan linksrc.Set, len(config.LinkSources))
+			wg.Add(len(config.LinkSources))
+			for _, ls := range config.LinkSources {
+				go func(
+					lc linksrc.Config,
+					g *sync.WaitGroup,
+					bc chan linksrc.Set,
+					ec chan error,
+				) {
+					defer g.Done()
+					r, err := httpClient.Poll(lc.URL)
 					if err != nil {
-						errCh <- err
-						goto add
+						ec <- err
+						return
 					}
-					news, err := s.NewSince(olds)
+					s, err := linksrc.NewSet(r, lc)
 					if err != nil {
-						errCh <- err
-						goto add
+						ec <- err
+						return
 					}
-					s = news
+
+					bc <- s
+
+				}(ls, &wg, emailBuildCh, errCh)
+			}
+			wg.Wait()
+			close(emailBuildCh)
+			log.Info().
+				Msg("done with one round of scraping")
+			for set := range emailBuildCh {
+				newSet := set.NewItems(db)
+
+				for _, item := range newSet.Items {
+					log.Info().Msg("storing a link item in the database")
+					err = db.Put(item.NewKVEntry())
+					if err != nil {
+						log.Error().
+							Err(err).
+							Msg("error saving a link item")
+						continue
+					}
 				}
-			add:
-				d.Add(s)
-			}(ls, &wg)
+				d.Add(newSet)
+				log.Info().
+					Int("itemCount", len(newSet.Items)).
+					Str("setName", newSet.Name).
+					Msg("added items to the email")
+			}
+			bod, err := d.GenerateBody()
+			if err != nil {
+				log.Error().Err(err).Msg("error generating an email body")
+				continue
+			}
+			txt, err := d.GenerateText()
+			if err != nil {
+				log.Error().Err(err).Msg("error generating an email plaintext")
+				continue
+			}
+			log.Info().
+				Msg("attempting to send an email")
+			err = smtpCl.SendNewsletter([]byte(txt), []byte(bod))
+			if err != nil {
+				log.Error().Err(err).Msg("error sending an email")
+				continue
+			}
+		case <-cleanupCadence.C:
+			log.Info().Msg("cleaning up the database")
+			err := db.Cleanup()
+			if err != nil {
+				log.Error().Err(err).Msg("error cleaning up the database")
+			}
+		case err := <-errCh:
+			log.Error().Err(err).Msg("error gathering links to email")
 		}
-		wg.Wait()
-		bod, err := d.GenerateBody()
-		if err != nil {
-			errCh <- err
-			return
-		}
-		emailCh <- bod
-	case <-cleanupCadence.C:
-		err := db.Cleanup()
-		log.Error().Err(err).Msg("error cleaning up the database")
-	case kve := <-storeCh:
-		err = db.Put(kve)
-		if err != nil {
-			errCh <- flag.ErrHelp
-			return
-		}
-	case err := <-errCh:
-		log.Error().Err(err).Msg("error sending email")
 	}
 }

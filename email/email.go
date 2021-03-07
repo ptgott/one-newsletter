@@ -1,52 +1,68 @@
 package email
 
 import (
-	"crypto/tls"
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
+	"mime/multipart"
+	"net/smtp"
+	"net/textproto"
 	"net/url"
 	"regexp"
-	"strconv"
-
-	gomail "gopkg.in/gomail.v2"
+	"strings"
 )
+
+type localStatus int
 
 const smtpScheme string = "smtp://"
 
-// dialAndSender generalizes the interface for dialing an SMTP server and
-// sending email so we don't need to test already hardened parts of the gomail
-// package in order to test our email sending logic
-type dialAndSender interface {
-	DialAndSend(...*gomail.Message) error
-}
-
-// UserConfig represents config options provided by
-// the user. Not meant to be used directly for sending
-// email without validation.
+// UserConfig represents config options provided the user. Not meant to be used
+// directly for sending email without validation.
 //
-// Normally taking file paths as user input isn't great
-// for testing, but we're accommodating the tls package,
-// which uses these.
+// Normally taking file paths as user input isn't great for testing, but we're
+// accommodating the tls package which uses these.
 // https://golang.org/pkg/crypto/tls/#LoadX509KeyPair
 type UserConfig struct {
-	RelayAddress string `json:"relayAddress" yaml:"relayAddress"`
-	Key          []byte `json:"key" yaml:"key"`   // PEM-encoded TLS key
-	Cert         []byte `json:"cert" yaml:"cert"` // PEM-encoded TLS cert
-	Username     string `json:"username" yaml:"username"`
-	Password     string `json:"password" yaml:"password"`
-	FromAddress  string `json:"fromAddress" yaml:"fromAddress"`
-	ToAddress    string `json:"toAddress" yaml:"toAddress"`
+	SMTPServerAddress string `yaml:"smtpServerAddress"`
+	FromAddress       string `yaml:"fromAddress"`
+	ToAddress         string `yaml:"toAddress"`
+}
+
+// isLocal determines whether a host is local by consulting its hostname. This
+// assumes that the hostname is valid, and doesn't do any validation itself.
+func isLocal(hostname string) bool {
+	localHostnames := [...]string{
+		"localhost",
+		"127.0.0.1",
+		"0.0.0.0",
+	}
+	status := false
+	for _, s := range localHostnames {
+		if strings.Contains(hostname, s) {
+			status = true
+		}
+	}
+	return status
 }
 
 // Validate returns an error if the UserConfig is invalid
-func (uc UserConfig) Validate() error {
-	// Ensure no fields are empty
+func (uc *UserConfig) Validate() error {
+	// Need to the relay address to determine which other config keys are
+	// required.
+	if uc.SMTPServerAddress == "" {
+		return errors.New("must include a relay address")
+	}
+
+	if !isLocal(uc.SMTPServerAddress) {
+		return fmt.Errorf("SMTP server address %v must be local", uc.SMTPServerAddress)
+	}
+
+	// Map of field-related validation rules, where keys are friendly names of
+	// fields and values are Booleans indicating whether the user config
+	// matches them
 	f := make(map[string]bool)
-	f["SMTP relay address"] = uc.RelayAddress == ""
-	f["TLS key"] = uc.Key == nil
-	f["TLS cert"] = uc.Cert == nil
-	f["SMTP server username"] = uc.Username == ""
-	f["SMTP server password"] = uc.Password == ""
+
 	f["\"from\" adddress for sending email"] = uc.FromAddress == ""
 	f["\"to\" address for sending email"] = uc.ToAddress == ""
 
@@ -61,19 +77,16 @@ func (uc UserConfig) Validate() error {
 
 // SMTPClient handles interactions with the local SMTP server
 type SMTPClient struct {
-	dialer      dialAndSender
-	FromAddress string
-	ToAddress   string
+	fromAddress string
+	toAddress   string
+	smtpHost    string
+	smtpPort    string
 }
 
 // NewSMTPClient validates user input and returns a Dialer
 // that we can use to send actual email. Returns an error
 // on validation failure.
-func NewSMTPClient(uc UserConfig) (*SMTPClient, error) {
-
-	if uc.Password == "" || uc.Username == "" {
-		return &SMTPClient{}, errors.New("must supply a username and password")
-	}
+func NewSMTPClient(uc *UserConfig) (*SMTPClient, error) {
 
 	if uc.ToAddress == "" || uc.FromAddress == "" {
 		return &SMTPClient{}, errors.New("must supply a \"to\" address and a \"from\" address")
@@ -85,11 +98,11 @@ func NewSMTPClient(uc UserConfig) (*SMTPClient, error) {
 	// Not handling the error since it only happens on compilation, which
 	// won't fail since the regexp is constant.
 	// https://github.com/golang/go/blob/b634f5d97a6e65f19057c00ed2095a1a872c7fa8/src/regexp/regexp.go#L560
-	m, _ := regexp.Match(fmt.Sprintf("^%v", smtpScheme), []byte(uc.RelayAddress))
+	m, _ := regexp.Match(fmt.Sprintf("^%v", smtpScheme), []byte(uc.SMTPServerAddress))
 	if m {
-		ra = uc.RelayAddress
+		ra = uc.SMTPServerAddress
 	} else {
-		ra = fmt.Sprintf("%v%v", smtpScheme, uc.RelayAddress)
+		ra = fmt.Sprintf("%v%v", smtpScheme, uc.SMTPServerAddress)
 	}
 
 	u, err := url.Parse(ra)
@@ -98,50 +111,83 @@ func NewSMTPClient(uc UserConfig) (*SMTPClient, error) {
 		return &SMTPClient{}, err
 	}
 
-	p, err := strconv.Atoi(u.Port())
+	// TODO: Need to use the port for dialing
 
 	if err != nil {
 		return &SMTPClient{}, err
-	}
-
-	cert, err := tls.X509KeyPair(uc.Cert, uc.Key)
-
-	if err != nil {
-		return &SMTPClient{}, err
-	}
-
-	tlsc := tls.Config{
-		Certificates: []tls.Certificate{
-			cert,
-		},
 	}
 
 	return &SMTPClient{
-		FromAddress: uc.FromAddress,
-		ToAddress:   uc.ToAddress,
-		dialer: &gomail.Dialer{
-			Host:      u.Hostname(),
-			Port:      p,
-			Username:  uc.Username,
-			Password:  uc.Password,
-			Auth:      nil,
-			SSL:       true,
-			TLSConfig: &tlsc,
-			LocalName: "",
-		},
+		fromAddress: uc.FromAddress,
+		toAddress:   uc.ToAddress,
+		smtpHost:    u.Hostname(),
+		smtpPort:    u.Port(),
 	}, nil
 
 }
 
-// Send sends the HTML message in body to the local SMTP server. A lack of an
-// error means the message was received by the destination SMTP server.
-func (sc *SMTPClient) Send(body string) error {
+// Send sends the newsletter to the local SMTP server. Callers must suppply the
+// newsletter as the `text/plain` MIME type in the asText param  and the
+// `text/html` type in asHTML. A lack of an error means the message was
+// received by the destination SMTP server.
+func (sc *SMTPClient) SendNewsletter(asText, asHTML []byte) error {
+	// Write the email body. It will have the following MIME entities.
+	// For more information see:
+	// - https://tools.ietf.org/html/rfc2045 (MIME headers)
+	// - https://tools.ietf.org/html/rfc2046#section-5 (MIME entity bodies)
+	//
+	//  |- multipart/alternative
+	//  |  |- text/plain
+	//  |  |- text/html
+	//
+	// Note that as per RFC 2046, we're putting the `text/html` entity
+	// last within the "multipart/alternative" entity since it's the best
+	// representation of the document. Servers can use the `text/plain`
+	// entity as well if they need to.
 
-	m := gomail.NewMessage()
-	m.SetHeader("From", sc.FromAddress)
-	m.SetHeader("To", sc.ToAddress)
-	m.SetHeader("Subject", "The latest from DivToNewsletter")
-	m.SetBody("text/html", body)
+	// Write the RFC 822 message headers. We need to do this manually. See:
+	// https://golang.org/pkg/net/smtp/#SendMail
+	var buf bytes.Buffer
+	msg := bufio.NewWriter(&buf)
+	headerWriter := textproto.NewWriter(msg)
+	headerWriter.PrintfLine("From: Your Link Newsletter<%s>", sc.fromAddress)
+	headerWriter.PrintfLine("To: <%s>", sc.toAddress)
+	headerWriter.PrintfLine("Subject: New links to look at")
+	headerWriter.PrintfLine("") // blank line before message body
 
-	return sc.dialer.DialAndSend(m)
+	// Create the multipart/alternative RFC 2046 entity
+	var ab bytes.Buffer
+	altWriter := multipart.NewWriter(&ab)
+	maw, _ := altWriter.CreatePart(
+		map[string][]string{"Content-Type": {"multipart/alternative"}},
+	)
+
+	plainWriter := multipart.NewWriter(maw)
+	pw, _ := plainWriter.CreatePart(
+		map[string][]string{"Content-Type": {"text/plain"}},
+	)
+	_, err := pw.Write(asText)
+	if err != nil {
+		return err
+	}
+
+	htmlWriter := multipart.NewWriter(maw)
+	hw, _ := htmlWriter.CreatePart(
+		map[string][]string{"Content-Type": {"text/html"}},
+	)
+	_, err = hw.Write(asHTML)
+	if err != nil {
+		return err
+	}
+
+	msg.Write(ab.Bytes()) // add the multipart body to the email message
+	msg.Flush()
+
+	return smtp.SendMail(
+		fmt.Sprintf("%v:%v", sc.smtpHost, sc.smtpPort),
+		nil,
+		sc.fromAddress,
+		[]string{sc.toAddress},
+		buf.Bytes(),
+	)
 }

@@ -12,6 +12,10 @@ It's also meant to be stateless, so you can build it into a machine image, use a
 
 While it won't be designed for managed services like Google Cloud Run or AWS Lambda (mainly due to tales of [surprise DDoS-related bills and Google account lockouts](https://news.ycombinator.com/item?id=22027459)), it will be a single Go module that you can wrap with your Lambda function or deploy as a container to Cloud Run.
 
+## Configuration
+
+TODO: Add a guide to the YAML structure
+
 ## Architecture
 
 The application needs to:
@@ -26,4 +30,8 @@ The application needs to:
 Uses BadgerDB
 
 ## Testing
-For end-to-end tests, you need to have MailHog installed. Create a JSON file called **e2e_config.json** at the root of this directory. Include the absolute path to MailHog in the `mailhog_path` key.
+
+For end-to-end tests, you need to have MailHog installed. Create a JSON file called **e2e_config.json** at the root of this directory. Include the following keys, which we're leaving to the developer to fill in depending on what's going on with their system:
+- `mailhog_path`: absolute path to the MailHog executable
+- `mailhog_http_port`: port used by MailHog for API requests
+- `mailhog_smtp_port`: port used by MailHog for SMTP traffic

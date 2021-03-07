@@ -104,9 +104,7 @@ func (mh *MailHog) retrieveEmails() ([]string, error) {
 	resp, err := http.Get(fmt.Sprintf("http://0.0.0.0:%v%v", mh.apiPort, msgPath))
 
 	if err != nil {
-		return []string{}, fmt.Errorf(
-			"can't retrieve emails from the local MailHog server: %v", err,
-		)
+		return []string{}, err
 	}
 	var buf bytes.Buffer
 
@@ -135,9 +133,7 @@ func (mh *MailHog) retrieveEmails() ([]string, error) {
 	}
 
 	if err != nil {
-		return []string{}, fmt.Errorf(
-			"can't read emails from the local MailHog server: %v", err,
-		)
+		return []string{}, err
 	}
 	var m messagesResult
 
