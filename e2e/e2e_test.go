@@ -4,6 +4,7 @@ import (
 	"divnews/testutil"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"testing"
@@ -71,11 +72,24 @@ func TestNewsletterEmail(t *testing.T) {
 		"../main.go",
 		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
 	)
-	err = cmd.Start()
+
+	// create a pipe to collect logs from the application
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		t.Errorf("couldn't start the app: %v", err)
+		t.Fatalf("couldn't create a pipe to the application: %v", err)
 	}
+
+	if err = cmd.Start(); err != nil {
+		t.Fatalf("couldn't start the app: %v", err)
+	}
+
 	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	b, err := io.ReadAll(stderr)
+	if err != nil {
+		t.Fatalf("couldn't read from the pipe to the application: %v", err)
+	}
+
+	os.Stdout.Write(b)
 	err = cmd.Process.Signal(os.Interrupt)
 
 	// At this point you need to find the process and kill it manually.

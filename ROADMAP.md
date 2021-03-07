@@ -4,8 +4,6 @@
 
 ## For the MVP (in order)
 
-1. Add log-based observability (replace `mft.Println/Printf` statements)
-
 1. Get the existing e2e test to pass
 
 1. Get to full unit test coverage

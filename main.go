@@ -8,13 +8,17 @@ import (
 	"divnews/storage"
 	"divnews/userconfig"
 	"flag"
-	"fmt"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 func main() {
+	// Log with filename and line number
+	log.Logger = log.With().Caller().Logger()
+
 	configPath := flag.String(
 		"config",
 		"./config.yaml",
@@ -22,27 +26,34 @@ func main() {
 	)
 	flag.Parse()
 
+	log.Info().
+		Str("config-path", *configPath).
+		Msg("starting the application")
+
 	f, err := os.Open(*configPath)
 
 	if err != nil {
-		fmt.Printf(
-			"We can't open the config file at %v: %v\n",
-			configPath,
-			err,
-		)
+		log.Error().
+			Str("config-path", *configPath).
+			Err(err).
+			Msg("We can't open the application config file")
 		os.Exit(1)
 	}
 
 	config, err := userconfig.Parse(f)
 
 	if err != nil {
-		fmt.Printf("Problem parsing your config: %v\n", err)
+		log.Error().
+			Err(err).
+			Msg("Problem parsing your config")
 		os.Exit(1)
 	}
 
 	c, err := email.NewSMTPClient(config.EmailSettings)
 	if err != nil {
-		fmt.Printf("Problem setting up the email client: %v", err)
+		log.Error().
+			Err(err).
+			Msg("Problem setting up the email client")
 		os.Exit(1)
 	}
 
@@ -55,7 +66,9 @@ func main() {
 
 	db, err := storage.NewBadgerDB(config.StorageSettings)
 	if err != nil {
-		fmt.Printf("Problem connecting to the database: %v", err)
+		log.Error().
+			Err(err).
+			Msg("problem connecting to the database")
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -127,10 +140,8 @@ func main() {
 		}
 		emailCh <- bod
 	case <-cleanupCadence.C:
-		db.Cleanup()
-		// TODO: Log any errors. For now, we can ignore them as long
-		// as the number of link sources is small while observing
-		// possible failure modes
+		err := db.Cleanup()
+		log.Error().Err(err).Msg("error cleaning up the database")
 	case kve := <-storeCh:
 		err = db.Put(kve)
 		if err != nil {
@@ -138,6 +149,6 @@ func main() {
 			return
 		}
 	case err := <-errCh:
-		fmt.Println(err)
+		log.Error().Err(err).Msg("error sending email")
 	}
 }
