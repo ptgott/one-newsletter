@@ -8,6 +8,8 @@
 
 1. Get to full unit test coverage
 
+1. Consider using the lowest common ancestor approach shown [here](https://www.benawad.com/scraping-recipe-websites) to find lists of links automatically without requiring the user to specify this via a CSS selector.
+
 1. Handle more complex client situations in `poller.Poll()`, such as retries and non-2xx responses. (Currently this has no defensive measures at all.)
 
 1. When closing a BadgerDB instance, the current approach doesn't return an error--making this easier to use with defer--but also panics instead of handling the error. Consider an alternative approach, or maybe retries.
