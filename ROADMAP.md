@@ -15,11 +15,7 @@
    - Handle more complex client situations in `poller.Poll()`, such as retries and non-2xx responses. (Currently this has no defensive measures at all.)
    - We need to close the response body somehow
 
-1. Consider using the lowest common ancestor approach shown [here](https://www.benawad.com/scraping-recipe-websites) to find lists of links automatically without requiring the user to specify this via a CSS selector.
-
 1. Add inline `<style>` tags to the email HTML to achieve styling.
-
-1. When closing a BadgerDB instance, the current approach doesn't return an error--making this easier to use with defer--but also panics instead of handling the error. Consider an alternative approach, or maybe retries.
 
 1. Add a message to the newsletter email when a link source's structure has changed and causes the provided selectors to return zero results.
 
@@ -27,9 +23,9 @@
 
 1. Find/remove any bottlenecks. Can do this by creating profiles while running the e2e tests with flags on the `go test` command.
 
-1. Update the README to describe the architecture of the application (what each package does and how they work together).
-
-1. Make sure there's an adequate `doc.go` for every package.
+1. Add more documentation:
+   - Update the README to describe the architecture of the application (what each package does and how they work together).
+   - Make sure there's an adequate `doc.go` for every package.
 
 1. Consider vendoring dependencies.
 
