@@ -120,15 +120,17 @@ func TestNewSMTPClient(t *testing.T) {
 	}()
 
 	for _, tc := range testCases {
-		_, err := NewSMTPClient(&tc.userConfig)
-		if (err != nil) != tc.shouldRaiseError {
-			t.Errorf("%v: expected error status %v but got %v with error %v",
-				tc.description,
-				tc.shouldRaiseError,
-				err != nil,
-				err,
-			)
-		}
+		t.Run(tc.description, func(t *testing.T) {
+			_, err := NewSMTPClient(&tc.userConfig)
+			if (err != nil) != tc.shouldRaiseError {
+				t.Errorf("%v: expected error status %v but got %v with error %v",
+					tc.description,
+					tc.shouldRaiseError,
+					err != nil,
+					err,
+				)
+			}
+		})
 	}
 
 }

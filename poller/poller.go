@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strconv"
 	"time"
 )
 
@@ -19,19 +17,6 @@ const minDurationMS int64 = 5000 // using MS since it's an int not a float
 // Config contains options for polling online publications for links
 type Config struct {
 	Interval time.Duration
-}
-
-// Validate returns an error if the Config is invalid
-func (c Config) Validate() error {
-	if c.Interval.Milliseconds() == 0 {
-		return errors.New("polling interval must be greater than zero")
-	}
-	if c.Interval.Milliseconds() < minDurationMS {
-		os.Stderr.Write([]byte(strconv.Itoa(int(c.Interval.Nanoseconds()))))
-		minDurS := minDurationMS / 1000
-		return fmt.Errorf("polling interval must be at least %v seconds", minDurS)
-	}
-	return nil
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
@@ -61,6 +46,15 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			"can't parse the user-provided polling interval as a duration: %v",
 			err,
 		)
+	}
+
+	if pd.Milliseconds() == 0 {
+		return errors.New("polling interval must be greater than zero")
+	}
+
+	if pd.Milliseconds() < minDurationMS {
+		minDurS := minDurationMS / 1000
+		return fmt.Errorf("polling interval must be at least %v seconds", minDurS)
 	}
 
 	c.Interval = pd

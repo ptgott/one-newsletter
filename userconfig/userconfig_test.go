@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestGenerateUntrusted(t *testing.T) {
+func TestParse(t *testing.T) {
 	// Asserting deep equality between the expected and actual Meta would
 	// be really convoluted and brittle, so we should make sure nothing
 	// fails unexpectedly and test knottier marshaling/validation situations
@@ -23,11 +23,7 @@ func TestGenerateUntrusted(t *testing.T) {
 			shouldBeEmpty: false,
 			conf: `---
 email:
-    relayAddress: 0.0.0.0:123
-    keyPath: ./tempTestDir3012705204/testKey.pem
-    certPath: ./tempTestDir3012705204/testCert.pem
-    username: myuser123
-    password: myuser123
+    smtpServerAddress: 0.0.0.0:123
     fromAddress: mynewsletter@example.com
     toAddress: recipient@example.com
 link_sources:
@@ -51,7 +47,7 @@ link_sources:
       linkSelector: "a"
 
 polling:
-    interval: 4s
+    interval: 5s
 storage:
     storageDir: ./tempTestDir3012705204
     keyTTL: "168h"
@@ -60,30 +56,32 @@ storage:
 	}
 
 	for _, tc := range testCases {
-		b := bytes.NewBuffer([]byte(tc.conf))
-		m, err := generateUntrusted(b)
+		t.Run(tc.description, func(t *testing.T) {
+			b := bytes.NewBuffer([]byte(tc.conf))
+			m, err := Parse(b)
 
-		if (err != nil) != tc.shouldBeError {
-			t.Errorf(
-				"%v: unexpected error status: wanted %v but got %v with error %v",
-				tc.description,
-				tc.shouldBeError,
-				err != nil,
-				err,
-			)
-		}
-
-		if reflect.DeepEqual(*m, Meta{}) != tc.shouldBeEmpty {
-			l := map[bool]string{
-				true:  "to be",
-				false: "not to be",
+			if (err != nil) != tc.shouldBeError {
+				t.Errorf(
+					"%v: unexpected error status: wanted %v but got %v with error %v",
+					tc.description,
+					tc.shouldBeError,
+					err != nil,
+					err,
+				)
 			}
-			t.Errorf(
-				"%v: expected the Meta %v nil, but got the opposite",
-				tc.description,
-				l[tc.shouldBeEmpty],
-			)
-		}
+
+			if reflect.DeepEqual(*m, Meta{}) != tc.shouldBeEmpty {
+				l := map[bool]string{
+					true:  "to be",
+					false: "not to be",
+				}
+				t.Errorf(
+					"%v: expected the Meta %v nil, but got the opposite",
+					tc.description,
+					l[tc.shouldBeEmpty],
+				)
+			}
+		})
 
 	}
 

@@ -77,7 +77,7 @@ func matchOne(s css.Selector, n *html.Node) (*html.Node, error) {
 
 // NewSet initializes a new collection of listed link items for an HTML
 // document Reader and link source configuration.
-func NewSet(r io.Reader, c Config) (Set, error) {
+func NewSet(r io.Reader, conf Config) (Set, error) {
 	// Note that the following quick.Check function could not find an invalid
 	// input for html.Parse:
 	//
@@ -96,26 +96,20 @@ func NewSet(r io.Reader, c Config) (Set, error) {
 	// for html.Parse.
 	n, _ := html.Parse(r)
 
-	conf, err := c.parse()
-
-	if err != nil {
-		return Set{}, err
-	}
-
 	// Get all items listing content to link to
-	ls := conf.itemSelector.MatchAll(n)
+	ls := conf.ItemSelector.MatchAll(n)
 
 	v := make([]LinkItem, len(ls))
 
 	// Find the link URL and caption for each list item.
 	for i, li := range ls {
-		l, err := matchOne(conf.linkSelector, li)
+		l, err := matchOne(conf.LinkSelector, li)
 
 		if err != nil {
 			return Set{}, err
 		}
 
-		p, err := matchOne(conf.captionSelector, li)
+		p, err := matchOne(conf.CaptionSelector, li)
 
 		if err != nil {
 			return Set{}, err
@@ -140,7 +134,7 @@ func NewSet(r io.Reader, c Config) (Set, error) {
 	}
 
 	s := Set{
-		Name:  conf.name,
+		Name:  conf.Name,
 		Items: v,
 	}
 

@@ -46,32 +46,38 @@ func isLocal(hostname string) bool {
 	return status
 }
 
-// Validate returns an error if the UserConfig is invalid
-func (uc *UserConfig) Validate() error {
-	// Need to the relay address to determine which other config keys are
-	// required.
-	if uc.SMTPServerAddress == "" {
-		return errors.New("must include a relay address")
+// UnmarshalYAML implements the yaml.Unmarshaler interface. Validation is
+// performed here.
+func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	v := make(map[string]string)
+	err := unmarshal(&v)
+
+	if err != nil {
+		return fmt.Errorf("can't parse the email config: %v", err)
 	}
 
-	if !isLocal(uc.SMTPServerAddress) {
+	ssa, ok := v["smtpServerAddress"]
+	if !ok {
+		return errors.New("email config must include the address of an SMTP server")
+	}
+
+	if !isLocal(ssa) {
 		return fmt.Errorf("SMTP server address %v must be local", uc.SMTPServerAddress)
 	}
 
-	// Map of field-related validation rules, where keys are friendly names of
-	// fields and values are Booleans indicating whether the user config
-	// matches them
-	f := make(map[string]bool)
+	uc.SMTPServerAddress = ssa
 
-	f["\"from\" adddress for sending email"] = uc.FromAddress == ""
-	f["\"to\" address for sending email"] = uc.ToAddress == ""
-
-	for k, v := range f {
-		if v {
-			return fmt.Errorf("missing email configuration field: %v", k)
-		}
+	fa, ok := v["fromAddress"]
+	if !ok {
+		return errors.New("email config must include a \"from\" adddress for sending email")
 	}
+	uc.FromAddress = fa
 
+	ta, ok := v["toAddress"]
+	if !ok {
+		return errors.New("email confic must include a \"to\" address for sending email")
+	}
+	uc.ToAddress = ta
 	return nil
 }
 
@@ -92,6 +98,10 @@ func NewSMTPClient(uc *UserConfig) (*SMTPClient, error) {
 		return &SMTPClient{}, errors.New("must supply a \"to\" address and a \"from\" address")
 	}
 
+	if uc.SMTPServerAddress == "" {
+		return &SMTPClient{}, errors.New("must supply an SMTP server address")
+	}
+
 	// Don't require the user to include a scheme. If we can't
 	// find one, use one for SMTP.
 	var ra string
@@ -106,12 +116,6 @@ func NewSMTPClient(uc *UserConfig) (*SMTPClient, error) {
 	}
 
 	u, err := url.Parse(ra)
-
-	if err != nil {
-		return &SMTPClient{}, err
-	}
-
-	// TODO: Need to use the port for dialing
 
 	if err != nil {
 		return &SMTPClient{}, err

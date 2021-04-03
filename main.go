@@ -112,7 +112,7 @@ func main() {
 					ec chan error,
 				) {
 					defer g.Done()
-					r, err := httpClient.Poll(lc.URL)
+					r, err := httpClient.Poll(lc.URL.String())
 					if err != nil {
 						ec <- err
 						return

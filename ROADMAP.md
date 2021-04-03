@@ -2,9 +2,18 @@
 
 ## Doing now
 
+### Current focus
+
 ## For the MVP (in order)
 
-1. Get to full (or full-enough) unit test coverage
+1. Get to full (or full-enough) unit test coverage. Within that, edit existing table-based unit tests to use subtests via `T.Run()` (https://golang.org/pkg/testing/#T.Run).
+
+- email
+- html
+- linksrc
+- poller
+- storage
+- userconfig
 
 1. Consider using the lowest common ancestor approach shown [here](https://www.benawad.com/scraping-recipe-websites) to find lists of links automatically without requiring the user to specify this via a CSS selector.
 
@@ -24,6 +33,7 @@
 1. Find/remove any bottlenecks. Can do this by creating profiles while running the e2e tests with flags on the `go test` command.
 
 1. Add more documentation:
+
    - Update the README to describe the architecture of the application (what each package does and how they work together).
    - Make sure there's an adequate `doc.go` for every package.
 

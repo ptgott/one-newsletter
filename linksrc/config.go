@@ -9,121 +9,85 @@ import (
 	css "github.com/andybalholm/cascadia"
 )
 
-// Config stores options for the link source container. It's designed for
-// parsing JSON sent and received across API boundaries, and could include
-// arbitrary user input!
+// Config stores options for the link source container.
+//
+// There is no support for grouped (i.e., comma-separated) selectors. This is
+// because, while grouped selectors are useful for applying styles to
+// generalized sets of elements, the HTML parser needs to locate elements
+// individually.
 type Config struct {
 	// The name of the source, e.g., "New York Magazine"
-	Name string `yaml:"name"`
-	// URL of the site containing links
-	URL string `yaml:"url"`
-	// CSS selector for a link within a list of links
-	ItemSelector string `yaml:"itemSelector"`
-	// CSS selector for a caption, relative to ItemSelector
-	CaptionSelector string `yaml:"captionSelector"`
-	// CSS selector for the actual link within a link item. Should be an
-	// "a" element. Relative to ItemSelector.
-	LinkSelector string `yaml:"linkSelector"`
-}
-
-// config represents a validated configuration document fit for
-// consumption elsewhere in the application. There is no support
-// for grouped (i.e., comma-separated) selectors. This is because, while
-// grouped selectors are useful for applying styles to generalized sets of
-// elements, the HTML parser needs to locate elements individually.
-// Since member types are specific to external packages used for
-// implementation, we should keep this unexported.
-type config struct {
-	// The name of the source, e.g., "New York Magazine"
-	name string
+	Name string
 	// url of the site containing links
-	url url.URL
+	URL url.URL
 	// CSS selector for a link within a list of links.
-	itemSelector css.Selector
+	ItemSelector css.Selector
 	// CSS selector for a caption within a link item.
 	// Relative to ItemSelector
-	captionSelector css.Selector
+	CaptionSelector css.Selector
 	// CSS selector for the actual link within a link item. Should be an
 	// "a" element. Relative to ItemSelector.
-	linkSelector css.Selector
+	LinkSelector css.Selector
 }
 
-// Validate indicates whether a link source configuration is valid and
-// returns an error otherwise
-func (c Config) Validate() error {
+// UnmarshalYAML implements the yaml.Unmarshaler interface. Validation is
+// performed here.
+func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	v := make(map[string]string)
+	err := unmarshal(&v)
 
-	// To make it faster/easier to edit invalid config docs, we'll
-	// try to return as many errors as we can in one go, rather than
-	// force callers to play the call-and-response game.
-	errs := []string{}
-
-	// Make sure all fields are accounted for. We'll use a map
-	// so we don't need to reflect.
-	fields := make(map[string]string)
-
-	fields["URL"] = c.URL
-	fields["ItemSelector"] = c.ItemSelector
-	fields["CaptionSelector"] = c.CaptionSelector
-	fields["LinkSelector"] = c.LinkSelector
-	fields["Name"] = c.Name
-
-	for k, v := range fields {
-		if v == "" {
-			errs = append(errs, fmt.Errorf(
-				"the config does not provide a value for %v",
-				k,
-			).Error())
-		}
+	if err != nil {
+		return fmt.Errorf("can't parse the email config: %v", err)
 	}
 
-	if len(errs) > 0 {
-		return errors.New(strings.Join(errs, ", "))
+	n, ok := v["name"]
+	if !ok {
+		return errors.New("the config must name the link source")
 	}
+	if n == "" {
+		return errors.New("the link source name can't be blank")
+	}
+	c.Name = n
+
+	if _, ok := v["url"]; !ok {
+		return errors.New("the link source must include a URL")
+	}
+
+	u, err := parseURL(v["url"])
+	if err != nil {
+		return fmt.Errorf("can't parse the link source URL: %v", err)
+	}
+	c.URL = u
+
+	if _, ok := v["itemSelector"]; !ok {
+		return errors.New("link source config must contain an item selector")
+	}
+	is, err := parseCSSSelector(v["itemSelector"])
+	if err != nil {
+		return fmt.Errorf("can't parse item selector: %v", err)
+	}
+	c.ItemSelector = is
+
+	if _, ok := v["captionSelector"]; !ok {
+		return errors.New("link source config must contain a caption selector")
+	}
+	cs, err := parseCSSSelector(v["captionSelector"])
+	if err != nil {
+		return fmt.Errorf("can't parse caption selector: %v", err)
+	}
+	c.CaptionSelector = cs
+
+	if _, ok := v["linkSelector"]; !ok {
+		return errors.New("link source config must contain a link selector")
+	}
+	ls, err := parseCSSSelector(v["linkSelector"])
+	if err != nil {
+		return fmt.Errorf("can't parse link selector: %v", err)
+	}
+	c.LinkSelector = ls
 
 	return nil
 
-}
-
-func (c Config) parse() (config, error) {
-	var errs []string
-
-	u, err := parseURL(c.URL)
-
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	is, err := parseCSSSelector(c.ItemSelector)
-
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-	cs, err := parseCSSSelector(c.CaptionSelector)
-
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	ls, err := parseCSSSelector(c.LinkSelector)
-
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	if len(errs) > 0 {
-		return config{}, fmt.Errorf(
-			"The configuration was invalid. %v",
-			strings.Join(errs, ", "),
-		)
-	}
-
-	return config{
-		url:             u,
-		itemSelector:    is,
-		captionSelector: cs,
-		linkSelector:    ls,
-		name:            c.Name,
-	}, nil
 }
 
 // parseURL parses a URL for the purpose of defining home pages for
