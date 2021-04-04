@@ -1,10 +1,8 @@
 package poller
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 )
@@ -66,20 +64,4 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // publication websites
 type Client struct {
 	http.Client
-}
-
-// Poll retrieves HTML from an HTTP endpoint for reading downstream
-func (c Client) Poll(url string) (io.Reader, error) {
-	resp, err := c.Get(url)
-	if err != nil {
-		return nil, err
-	}
-
-	r := bytes.Buffer{}
-	_, err = r.ReadFrom(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return &r, nil
 }

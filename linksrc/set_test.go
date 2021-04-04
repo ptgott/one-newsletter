@@ -1,5 +1,14 @@
 package linksrc
 
+import (
+	"bytes"
+	"net/url"
+	"reflect"
+	"testing"
+
+	css "github.com/andybalholm/cascadia"
+)
+
 // Using one HTML string in all unit tests. Just like
 // in a real case, we can't change the HTML we want to
 // scrape.
@@ -46,3 +55,157 @@ const testHTML = `<!doctype html5>
 	</div>
 </body>
 </html>`
+
+// mustParseURL is a test utility for returning a single value
+// from url.Parse where the input isn't user-defined and
+// we'd rather panic on the error than return it.
+func mustParseURL(raw string) *url.URL {
+	u, err := url.Parse(raw)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
+func TestNewSet(t *testing.T) {
+	tests := []struct {
+		name    string
+		conf    Config
+		want    Set
+		wantErr bool
+	}{
+		{
+			name: "canonical/intended case",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+			},
+			wantErr: false,
+			want: Set{
+				Name: "My Cool Publication",
+				Items: []LinkItem{
+					{
+						LinkURL: "www.example.com/stories/hot-take",
+						Caption: "This is a hot take!",
+					},
+					{
+						LinkURL: "www.example.com/stories/stuff-happened",
+						Caption: "Stuff happened today, yikes.",
+					},
+					{
+						LinkURL: "www.example.com/storiesreally-true",
+						Caption: "Is this supposition really true?",
+					},
+				},
+			},
+		},
+		{
+			name: "ambiguous link selector",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("*"),
+			},
+			wantErr: true,
+			want:    Set{},
+		},
+		{
+			name: "ambiguous caption selector",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span"),
+				LinkSelector:    css.MustCompile("a"),
+			},
+			wantErr: false,
+			want: Set{
+				Name: "My Cool Publication",
+				Items: []LinkItem{
+					{
+						LinkURL: "www.example.com/stories/hot-take",
+						Caption: "[Missing caption due to ambiguous selector]",
+					},
+					{
+						LinkURL: "www.example.com/stories/stuff-happened",
+						Caption: "[Missing caption due to ambiguous selector]",
+					},
+					{
+						LinkURL: "www.example.com/storiesreally-true",
+						Caption: "[Missing caption due to ambiguous selector]",
+					},
+				},
+			},
+		},
+		{
+			name: "no link selector matches",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a:nth-of-type(2)"),
+			},
+			wantErr: true,
+			want:    Set{},
+		},
+		{
+			name: "the link selector matches a non-link",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("span.itemName"),
+			},
+			wantErr: true,
+			want:    Set{},
+		},
+		{
+			name: "the caption selector has no matches",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.noMatch"),
+				LinkSelector:    css.MustCompile("a"),
+			},
+			wantErr: false,
+			want: Set{
+				Name: "My Cool Publication",
+				Items: []LinkItem{
+					{
+						LinkURL: "www.example.com/stories/hot-take",
+						Caption: "",
+					},
+					{
+						LinkURL: "www.example.com/stories/stuff-happened",
+						Caption: "",
+					},
+					{
+						LinkURL: "www.example.com/storiesreally-true",
+						Caption: "",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := bytes.NewBuffer([]byte(testHTML))
+			got, err := NewSet(r, tt.conf)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewSet() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewSet() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

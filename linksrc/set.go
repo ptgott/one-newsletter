@@ -1,79 +1,11 @@
 package linksrc
 
 import (
-	"divnews/storage"
 	"errors"
-	"fmt"
 	"io"
-	"strings"
 
 	"golang.org/x/net/html"
-
-	css "github.com/andybalholm/cascadia"
 )
-
-// extractLinkURL returns the href attribute of HTML a elements.
-// It returns an error if n is not an a element.
-func extractLinkURL(n html.Node) (string, error) {
-
-	// Bail out early if the node is not a link.
-	if n.Data != "a" {
-		return "", fmt.Errorf(
-			"trying to extract a URL from a node that's not a link. Node data: %v",
-			n.Data,
-		)
-	}
-
-	var h string // The string value of n's href attribute
-
-	// Find the href attribute of the link
-	for _, a := range n.Attr {
-		if a.Key == "href" {
-			h = a.Val
-		}
-	}
-
-	return h, nil
-
-}
-
-// extractText returns the text node of an HTML node.
-// Assumes that the text node is the first child of the HTML
-// node, and returns an error if the assumption isn't met.
-func extractText(n html.Node) (string, error) {
-	// We're assuming that the first child node of the caption element
-	// will be a text node. The text node's Data contains its content.
-	// See: https://godoc.org/golang.org/x/net/html#Node
-	t := n.FirstChild.Data
-
-	// For nodes that aren't text nodes, the html package
-	// seems to return an empty string
-	if strings.Trim(t, "\n\t ") == "" {
-		return "", errors.New("expected the parent of a text node, but could not find text")
-	}
-
-	return t, nil
-}
-
-// matchOne returns a single html.Node matching selector s.
-// It returns an error if there are multiple matches.
-// (This exists because there is no similar function in the
-// cascadia library.)
-func matchOne(s css.Selector, n *html.Node) (*html.Node, error) {
-
-	ns := s.MatchAll(n)
-
-	if len(ns) > 1 {
-		return &html.Node{}, fmt.Errorf("ambiguous selector: returned %v matches", len(ns))
-	}
-
-	if len(ns) == 0 {
-		return &html.Node{}, errors.New("found no matches")
-	}
-
-	return ns[0], nil // We know at this point that there must be a single match
-
-}
 
 // NewSet initializes a new collection of listed link items for an HTML
 // document Reader and link source configuration.
@@ -103,33 +35,57 @@ func NewSet(r io.Reader, conf Config) (Set, error) {
 
 	// Find the link URL and caption for each list item.
 	for i, li := range ls {
-		l, err := matchOne(conf.LinkSelector, li)
-
-		if err != nil {
-			return Set{}, err
+		ns := conf.LinkSelector.MatchAll(li)
+		if len(ns) > 1 {
+			// The selector is ambiguous--skip this item
+			return Set{}, errors.New("ambiguous link selector")
+		}
+		if len(ns) == 0 {
+			// If the link selector has no matches, this is likely
+			// true of other list items as well. Return an error
+			// so we can let the user know.
+			return Set{}, errors.New("no links in the list item")
 		}
 
-		p, err := matchOne(conf.CaptionSelector, li)
-
-		if err != nil {
-			return Set{}, err
+		if ns[0].Data != "a" {
+			// The link selector doesn't match a link. This is likely
+			// true of other list items, so let the user know.
+			return Set{}, errors.New(
+				"link selector does not match a link but rather " + ns[0].Data,
+			)
 		}
 
-		u, err := extractLinkURL(*l)
-
-		if err != nil {
-			return Set{}, err
+		// Find the href attribute of the link
+		var h string // The string value of n's href attribute
+		for _, a := range ns[0].Attr {
+			if a.Key == "href" {
+				h = a.Val
+			}
 		}
 
-		t, err := extractText(*p)
+		cs := conf.CaptionSelector.MatchAll(li)
+		var caption string
+		if len(cs) == 0 {
+			// No captions in this item--skip it
+			caption = ""
+		}
+		if len(cs) > 1 {
+			// The caption is ambiguous. Keep the link, since there's
+			// still value there, but let the user know.
+			caption = "[Missing caption due to ambiguous selector]"
+		}
 
-		if err != nil {
-			return Set{}, err
+		if len(cs) == 1 {
+			// We're assuming that the first child node of the caption element
+			// will be a text node. The text node's Data contains its content.
+			// See: https://godoc.org/golang.org/x/net/html#Node
+			caption = cs[0].FirstChild.Data
+
 		}
 
 		v[i] = LinkItem{
-			LinkURL: u,
-			Caption: t,
+			LinkURL: h,
+			Caption: caption,
 		}
 	}
 
@@ -146,23 +102,4 @@ func NewSet(r io.Reader, conf Config) (Set, error) {
 type Set struct {
 	Name  string // probably the publication the links came from
 	Items []LinkItem
-}
-
-// NewSince returns a Set consisting of only the LinkItems that we haven't yet
-// stored in the database, which we're assuming are new to the Web.
-func (s Set) NewItems(db *storage.BadgerDB) Set {
-	var results []LinkItem
-
-	for _, item := range s.Items {
-		// The LinkItem isn't in the database--it must be new, so use it!
-		_, err := db.Read(item.Key())
-		if err != nil {
-			results = append(results, item)
-		}
-	}
-
-	return Set{
-		Name:  s.Name,
-		Items: results,
-	}
 }

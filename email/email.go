@@ -53,7 +53,7 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	err := unmarshal(&v)
 
 	if err != nil {
-		return fmt.Errorf("can't parse the email config: %v", err)
+		return errors.New("the email config must be an object")
 	}
 
 	ssa, ok := v["smtpServerAddress"]
@@ -170,19 +170,13 @@ func (sc *SMTPClient) SendNewsletter(asText, asHTML []byte) error {
 	pw, _ := plainWriter.CreatePart(
 		map[string][]string{"Content-Type": {"text/plain"}},
 	)
-	_, err := pw.Write(asText)
-	if err != nil {
-		return err
-	}
+	pw.Write(asText)
 
 	htmlWriter := multipart.NewWriter(maw)
 	hw, _ := htmlWriter.CreatePart(
 		map[string][]string{"Content-Type": {"text/html"}},
 	)
-	_, err = hw.Write(asHTML)
-	if err != nil {
-		return err
-	}
+	hw.Write(asHTML)
 
 	msg.Write(ab.Bytes()) // add the multipart body to the email message
 	msg.Flush()

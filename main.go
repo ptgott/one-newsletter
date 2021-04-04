@@ -112,12 +112,13 @@ func main() {
 					ec chan error,
 				) {
 					defer g.Done()
-					r, err := httpClient.Poll(lc.URL.String())
+					r, err := httpClient.Client.Get(lc.URL.String())
 					if err != nil {
 						ec <- err
 						return
 					}
-					s, err := linksrc.NewSet(r, lc)
+					defer r.Body.Close()
+					s, err := linksrc.NewSet(r.Body, lc)
 					if err != nil {
 						ec <- err
 						return
@@ -132,9 +133,17 @@ func main() {
 			log.Info().
 				Msg("done with one round of scraping")
 			for set := range emailBuildCh {
-				newSet := set.NewItems(db)
-
-				for _, item := range newSet.Items {
+				newSet := linksrc.Set{
+					Name:  set.Name,
+					Items: []linksrc.LinkItem{},
+				}
+				// See if any items are missing in the db. If so, store them
+				// and add them to a new email body.
+				for _, item := range set.Items {
+					_, err := db.Read(item.Key())
+					if err != nil {
+						newSet.Items = append(newSet.Items, item)
+					}
 					log.Info().Msg("storing a link item in the database")
 					err = db.Put(item.NewKVEntry())
 					if err != nil {

@@ -49,8 +49,9 @@ func (db *BadgerDB) Put(entry KVEntry) error {
 
 // Read returns an entry by key.
 func (db *BadgerDB) Read(key []byte) (KVEntry, error) {
+	// Based on:
+	// https://dgraph.io/docs/badger/get-started/#using-key-value-pairs/
 	var val []byte
-	// See: https://dgraph.io/docs/badger/get-started/#read-only-transactions
 	err := db.connection.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 
@@ -58,14 +59,16 @@ func (db *BadgerDB) Read(key []byte) (KVEntry, error) {
 			return fmt.Errorf("can't retrieve a value for the key provided: %v", err)
 		}
 
-		// We copy values rather than return them directly because item.Value()
-		// is considered undefined behavior outside a transaction.
-		// https://godoc.org/github.com/dgraph-io/badger#Item.Value
-		_, err = item.ValueCopy(val)
+		err = item.Value(func(v []byte) error {
+			// allocate a copy of v, rather than assign directly to v
+			val = append([]byte{}, v...)
+			return nil
+		})
 
 		if err != nil {
-			return fmt.Errorf("can't copy the value from the database: %v", err)
+			return fmt.Errorf("can't retrieve the value from the database: %v", err)
 		}
+
 		return nil
 	})
 	if err != nil {

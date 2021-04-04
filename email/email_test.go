@@ -2,6 +2,7 @@ package email
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"math/rand"
@@ -13,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -20,36 +23,106 @@ var (
 	testcertpath string = "mycert.pem"
 )
 
+func TestUnmarshalYAML(t *testing.T) {
+	testCases := []struct {
+		description   string
+		input         string
+		shouldBeError bool
+	}{
+		{
+			description: "valid case",
+			input: `smtpServerAddress: 0.0.0.0:123
+fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: false,
+		},
+		{
+			description: "no to address",
+			input: `smtpServerAddress: 0.0.0.0:123
+fromAddress: mynewsletter@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "no from address",
+			input: `smtpServerAddress: 0.0.0.0:123
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "remote server address",
+			input: `smtpServerAddress: 123.123.123:123
+fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "no server address",
+			input: `fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description:   "not a map[string]string",
+			input:         `[]`,
+			shouldBeError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			var uc UserConfig
+			buf := bytes.NewBuffer([]byte(tc.input))
+			dec := yaml.NewDecoder(buf)
+			err := dec.Decode(&uc)
+			if (err != nil) != tc.shouldBeError {
+				t.Errorf(
+					"%v: unexpected error status--wanted %v but got %v with error %v",
+					tc.description,
+					tc.shouldBeError,
+					err != nil,
+					err,
+				)
+			}
+		})
+	}
+}
+
 func TestIsLocal(t *testing.T) {
 	testCases := []struct {
+		description    string
 		input          string
 		expectedResult bool
 	}{
 		{
+			description:    "localhost",
 			input:          "localhost",
 			expectedResult: true,
 		},
 		{
+			description:    "loopback IP",
 			input:          "127.0.0.1",
 			expectedResult: true,
 		},
 		{
+			description:    "all zeros",
 			input:          "0.0.0.0",
 			expectedResult: true,
 		},
 	}
 
 	for _, tc := range testCases {
-		res := isLocal(tc.input)
+		t.Run(tc.description, func(t *testing.T) {
+			res := isLocal(tc.input)
 
-		if res != tc.expectedResult {
-			t.Errorf(
-				"unexpected result for input %v: wanted %v but got %v",
-				tc.input,
-				tc.expectedResult,
-				res,
-			)
-		}
+			if res != tc.expectedResult {
+				t.Errorf(
+					"unexpected result for input %v: wanted %v but got %v",
+					tc.input,
+					tc.expectedResult,
+					res,
+				)
+			}
+		})
 	}
 
 }

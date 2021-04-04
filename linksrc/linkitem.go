@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"divnews/storage"
 	"encoding/binary"
-	"encoding/json"
 	"time"
 )
 
@@ -19,24 +18,14 @@ type LinkItem struct {
 	Caption string
 }
 
-// serialize makes the LinkItem suitable for writing to disk or comparing with
-// in-memory LinkItems.
-func (li LinkItem) serialize() []byte {
-	// We suppress the error because it depends on reflection of the value
-	// within the interface passed to Marshal. This is always a LinkItem,
-	// which won't cause any errors.
-	// https://github.com/golang/go/blob/d0d38f0f707e69965a5f5a637fa568c646899d39/src/encoding/json/encode.go#L322-L334
-	j, _ := json.Marshal(li)
-	return j
-}
-
 // Key returns the key to use for determining whether a LinkItem has already
 // been stored within the database
 func (li LinkItem) Key() []byte {
 	// The key is the hash of the entire serialized LinkItem. This lets us quickly
 	// determine whether a LinkItem already exists in storage.
 	k := sha256.New()
-	k.Write(li.serialize())
+	k.Write([]byte(li.Caption))
+	k.Write([]byte(li.LinkURL))
 	return k.Sum(nil)
 }
 

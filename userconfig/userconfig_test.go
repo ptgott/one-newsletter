@@ -53,6 +53,12 @@ storage:
     keyTTL: "168h"
     cleanupInterval: "10m"`,
 		},
+		{
+			description:   "not yaml",
+			shouldBeError: true,
+			shouldBeEmpty: true,
+			conf:          `this is not yaml`,
+		},
 	}
 
 	for _, tc := range testCases {

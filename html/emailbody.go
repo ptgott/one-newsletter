@@ -34,7 +34,6 @@ const emailBodyHTML = `<html>
 // Meant to satisfy the text/plain MIME type.
 const emailBodyText = `Here are the latest links:
 {{ range . }}
-
 {{.Name}}
 {{ range .Items }}
 - {{.Caption}}
@@ -89,10 +88,7 @@ func (ed *EmailData) GenerateBody() (string, error) {
 	// The template text is constant, so suppressing the error
 	tmpl, _ := template.New("body").Parse(emailBodyHTML)
 
-	err := tmpl.Execute(&buf, ed.LinkSets())
-	if err != nil {
-		return "", err
-	}
+	tmpl.Execute(&buf, ed.LinkSets())
 
 	return string(buf.Bytes()), nil
 }
@@ -116,10 +112,7 @@ func (ed *EmailData) GenerateText() (string, error) {
 	// The template text is constant, so suppressing the error
 	tmpl, _ := template.New("body").Parse(emailBodyText)
 
-	err := tmpl.Execute(&buf, ed.LinkSets())
-	if err != nil {
-		return "", err
-	}
+	tmpl.Execute(&buf, ed.LinkSets())
 
 	return string(buf.Bytes()), nil
 }
