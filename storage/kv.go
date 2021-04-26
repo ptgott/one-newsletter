@@ -8,9 +8,8 @@ import (
 
 // KVConfig contains settings specific to BadgerDB connections
 type KVConfig struct {
-	StorageDirPath  string        `yaml:"storageDir"`
-	KeyTTLDuration  time.Duration `yaml:"keyTTL"`
-	CleanupInterval time.Duration `yaml:"cleanupInterval"`
+	StorageDirPath string        `yaml:"storageDir"`
+	KeyTTLDuration time.Duration `yaml:"keyTTL"`
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
@@ -47,21 +46,6 @@ func (c *KVConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		)
 	}
 	c.KeyTTLDuration = pd
-
-	ci, ok := v["cleanupInterval"]
-	if !ok {
-		return errors.New(
-			"user-provided storage config does not include a cleanup interval",
-		)
-	}
-	cd, err := time.ParseDuration(ci)
-	if err != nil {
-		return fmt.Errorf(
-			"can't parse the user-provided key cleanup interval as a duration: %v",
-			err,
-		)
-	}
-	c.CleanupInterval = cd
 
 	return nil
 }

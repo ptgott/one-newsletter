@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -94,11 +93,12 @@ type messagesResult struct {
 }
 
 // retrieveEmails returns the bodies of the emails currently held by MailHog so
-// we can inspect them.
+// we can inspect them. Only returns emails sent after the Unix seconds
+// timestamp tm.
 //
 // Uses the API documented here:
 // https://github.com/mailhog/MailHog/blob/0441dd494b03c9255a9b8e90e3458ebb115eacff/docs/APIv2/swagger-2.0.yaml
-func (mh *MailHog) retrieveEmails() ([]string, error) {
+func (mh *MailHog) retrieveEmails(tm int64) ([]string, error) {
 	msgPath := "/api/v2/messages"
 
 	resp, err := http.Get(fmt.Sprintf("http://0.0.0.0:%v%v", mh.apiPort, msgPath))
@@ -106,7 +106,6 @@ func (mh *MailHog) retrieveEmails() ([]string, error) {
 	if err != nil {
 		return []string{}, err
 	}
-	var buf bytes.Buffer
 
 	if resp.StatusCode == 401 {
 		return []string{}, fmt.Errorf(
@@ -124,20 +123,8 @@ func (mh *MailHog) retrieveEmails() ([]string, error) {
 		)
 	}
 
-	n, err := buf.ReadFrom(resp.Body)
-
-	if n == 0 {
-		return []string{}, errors.New(
-			"got an empty response body from the MailHog server",
-		)
-	}
-
-	if err != nil {
-		return []string{}, err
-	}
 	var m messagesResult
-
-	err = json.Unmarshal(buf.Bytes(), &m)
+	err = json.NewDecoder(resp.Body).Decode(&m)
 	if err != nil {
 		return []string{}, fmt.Errorf(
 			"can't read the API response as JSON: %v", err,
@@ -145,8 +132,11 @@ func (mh *MailHog) retrieveEmails() ([]string, error) {
 	}
 
 	s := make([]string, len(m.Items), len(m.Items))
+	// Return only emails created after the given timestamp
 	for i := range m.Items {
-		s[i] = m.Items[i].Content.Body
+		if m.Items[i].Created.Unix() >= tm {
+			s[i] = m.Items[i].Content.Body
+		}
 	}
 	return s, nil
 }

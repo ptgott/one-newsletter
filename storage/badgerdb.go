@@ -5,6 +5,8 @@ import (
 	"time"
 
 	badger "github.com/dgraph-io/badger/v3"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // BadgerDB implements KeyValue and represents the application's connection
@@ -14,12 +16,50 @@ type BadgerDB struct {
 	keyTTL     time.Duration // TTL for each key in the db
 }
 
+// badgerLogger lets us implement BadgerDB's Logger interface so we can log
+// database events.
+type badgerLogger struct {
+	zerolog.Logger
+}
+
+// Debugf lets badgerLogger implement the BadgerDB Logger interface
+func (bl badgerLogger) Debugf(s string, o ...interface{}) {
+	bl.Logger.Debug().Msg(fmt.Sprintf(s, o...))
+}
+
+// Errorf lets badgerLogger implement the BadgerDB Logger interface
+func (bl badgerLogger) Errorf(s string, o ...interface{}) {
+	bl.Logger.Error().Msg(fmt.Sprintf(s, o...))
+}
+
+// Infof lets badgerLogger implement the BadgerDB Logger interface
+func (bl badgerLogger) Infof(s string, o ...interface{}) {
+	bl.Logger.Info().Msg(fmt.Sprintf(s, o...))
+}
+
+// Warningf lets badgerLogger implement the BadgerDB Logger interface
+func (bl badgerLogger) Warningf(s string, o ...interface{}) {
+	bl.Logger.Info().Msg(fmt.Sprintf(s, o...))
+}
+
 // NewBadgerDB initializes the BadgerDB embedded database. It is up to the
 // caller to close the database with Close().
 func NewBadgerDB(conf *KVConfig) (*BadgerDB, error) {
 	// Open the Badger database at dirPath.
 	// See: https://dgraph.io/docs/badger/get-started/#opening-a-database
-	db, err := badger.Open(badger.DefaultOptions(conf.StorageDirPath))
+	db, err := badger.Open(
+		badger.DefaultOptions(conf.StorageDirPath).
+			// The default is one million, and value log GC takes place at the
+			// level of the file--we need to keep this small so GC takes place
+			// regularly enough to ensure a constant file size.
+			WithValueLogMaxEntries(100).
+			WithLogger(badgerLogger{log.Logger}).
+			// Among other things, compacting on close updates discard info so
+			// we can run value log GC later. Without this, the size of the data
+			// directory will increase each polling interval.
+			// https://github.com/dgraph-io/badger/blob/ca80206d2c0c869560d5b9cfdcab0307c807a54c/levels.go#L861
+			WithCompactL0OnClose(true),
+	)
 
 	if err != nil {
 		return &BadgerDB{}, fmt.Errorf("can't open the db connection: %v", err)
@@ -89,7 +129,12 @@ func (db *BadgerDB) Read(key []byte) (KVEntry, error) {
 // setting TTLs for records!
 func (db *BadgerDB) Cleanup() error {
 	var discardRatio float64 = .5
-	err := db.connection.RunValueLogGC(discardRatio)
+	var err error
+	// BadgerDB recommends running RunValueLogGC repeatedly since it only
+	// removes one file at a time.
+	for err = db.connection.RunValueLogGC(discardRatio); err == nil; {
+		continue
+	}
 	// If the GC determines that it can't rewrite anything, don't worry the
 	// caller--just skip it
 	if err.Error() == badger.ErrNoRewrite.Error() {

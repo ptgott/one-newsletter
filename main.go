@@ -79,21 +79,18 @@ func main() {
 
 	var httpClient poller.Client
 	scrapeCadence := time.NewTicker(config.PollSettings.Interval)
-	cleanupCadence := time.NewTicker(config.StorageSettings.CleanupInterval)
-
-	db, err := storage.NewBadgerDB(config.StorageSettings)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("problem connecting to the database")
-		os.Exit(1)
-	}
-	defer db.Close()
-	log.Info().Msg("set up the database connection successfully")
 
 	for {
 		select {
 		case <-scrapeCadence.C:
+			db, err := storage.NewBadgerDB(config.StorageSettings)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Msg("problem connecting to the database")
+				continue // Maybe this was a transient error? Log it and move on.
+			}
+			log.Info().Msg("set up the database connection successfully")
 			log.Info().
 				Int("count", len(config.LinkSources)).
 				Msg("launching scrapers")
@@ -140,6 +137,8 @@ func main() {
 				// See if any items are missing in the db. If so, store them
 				// and add them to a new email body.
 				for _, item := range set.Items {
+					// Read returns a "key not found" error if a key is not found.
+					// https://pkg.go.dev/github.com/dgraph-io/badger#Txn.Get
 					_, err := db.Read(item.Key())
 					if err != nil {
 						newSet.Items = append(newSet.Items, item)
@@ -159,6 +158,21 @@ func main() {
 					Str("setName", newSet.Name).
 					Msg("added items to the email")
 			}
+
+			// Get rid of old keys just before we close
+			err = db.Cleanup()
+			if err != nil {
+				log.Error().Err(err).Msg("error cleaning up the database")
+			}
+			// Close the connection here so BadgerDB can flush to disk.
+			// Otherwise, BadgerDB has to reach its MaxTableSize before it
+			// flushes--we want to write the results of each scraping round to
+			// disk, and there's no need to keep the DB connection open while
+			// waiting for the next scrape.
+			//
+			// https://pkg.go.dev/github.com/dgraph-io/badger#readme-i-don-t-see-any-disk-writes-why
+			db.Close()
+			log.Info().Msg("closed the database to flush data to disk")
 			bod, err := d.GenerateBody()
 			if err != nil {
 				log.Error().Err(err).Msg("error generating an email body")
@@ -175,12 +189,6 @@ func main() {
 			if err != nil {
 				log.Error().Err(err).Msg("error sending an email")
 				continue
-			}
-		case <-cleanupCadence.C:
-			log.Info().Msg("cleaning up the database")
-			err := db.Cleanup()
-			if err != nil {
-				log.Error().Err(err).Msg("error cleaning up the database")
 			}
 		case err := <-errCh:
 			log.Error().Err(err).Msg("error gathering links to email")

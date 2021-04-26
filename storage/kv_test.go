@@ -21,19 +21,6 @@ cleanupInterval: "10m"`,
 			wantErr: false,
 		},
 		{
-			name: "cleanup interval not a duration",
-			config: `storageDir: ./tempTestDir3012705204
-keyTTL: "168h"
-cleanupInterval: "10"`,
-			wantErr: true,
-		},
-		{
-			name: "no cleanup interval",
-			config: `storageDir: ./tempTestDir3012705204
-keyTTL: "168h"`,
-			wantErr: true,
-		},
-		{
 			name: "key TTL not a duration",
 			config: `storageDir: ./tempTestDir3012705204
 keyTTL: "168"

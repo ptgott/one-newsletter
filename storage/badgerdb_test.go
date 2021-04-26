@@ -19,8 +19,7 @@ func TestSimpleBadgerDBReadWrite(t *testing.T) {
 		StorageDirPath: dir,
 		// Set these durations to a very long value since we don't expect
 		// keys to be cleaned up during the test
-		KeyTTLDuration:  time.Duration(10) * time.Second,
-		CleanupInterval: time.Duration(10) * time.Second,
+		KeyTTLDuration: time.Duration(10) * time.Second,
 	}
 	db, err := NewBadgerDB(&conf)
 
@@ -50,42 +49,4 @@ func TestSimpleBadgerDBReadWrite(t *testing.T) {
 		t.Fatal("newly created and newly read KV entries do not match")
 	}
 
-}
-
-func TestCleanup(t *testing.T) {
-	sleepDur := time.Duration(10) * time.Millisecond
-	dir := t.TempDir()
-	conf := KVConfig{
-		StorageDirPath: dir,
-		// Ensure that new keys will expire during the test.
-		KeyTTLDuration: sleepDur,
-	}
-	db, err := NewBadgerDB(&conf)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	kv := KVEntry{
-		Key:   []byte("Hello"),
-		Value: []byte("World"),
-	}
-
-	err = db.Put(kv)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, v1 := db.connection.Size()
-
-	time.Sleep(sleepDur)
-
-	_, v2 := db.connection.Size()
-
-	// the cleanup operation should reduce the size of the value log
-	if v1 <= v2 {
-		t.Errorf("value log size was not reduced by the GC--before: %v, after: %v", v1, v2)
-	}
 }

@@ -18,6 +18,7 @@ type appConfigOptions struct {
 	LinkSources       []mockLinksrcInfo
 	StorageDir        string
 	PollInterval      string
+	KeyTTL            string
 }
 
 // mockLinksrcInfo contains metadata about test HTTP servers so we can use it
@@ -49,8 +50,7 @@ polling:
     interval: {{ .PollInterval }}
 storage:
     storageDir: {{ .StorageDir }}
-    keyTTL: "168h"
-    cleanupInterval: "10m"
+    keyTTL: {{ .KeyTTL }}
 `
 
 	tmpl, err := template.New("conf").Parse(configTemplate)
