@@ -23,6 +23,8 @@ const emailBodyHTML = `<html>
 				<h2>{{.Name}}</h2>
 				{{ range .Items }}
 					<p>{{.Caption}} (<a href="{{.LinkURL}}">here</a>)</p>
+				{{ else }}
+					<p>We could not find any links for this site! You might want to check your configuration.</p>
 				{{ end }}
 			{{ end }}
 		</tbody>
@@ -38,7 +40,10 @@ const emailBodyText = `Here are the latest links:
 {{ range .Items }}
 - {{.Caption}}
   {{.LinkURL}}
+{{ else }}
+  We could not find any links for this site! You might want to check your configuration.
 {{ end }}
+
 {{ end }}
 `
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"divnews/linksrc"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -76,16 +77,8 @@ func TestGenerateBody(t *testing.T) {
 		if err != nil {
 			t.Errorf("couldn't write to the golden file: %v", err)
 		}
-
-		// testing-internal error: shouldn't happen unless there's an issue
-		// with your filesystem
-		if err != nil {
-			t.Errorf("error creating the golden file: %v", err)
-		}
-
 		// Don't check the in-memory HTML against the file we just created
 		return
-
 	}
 
 	f, err := os.Open(relativeGoldenHTMLFilePath)
@@ -132,6 +125,55 @@ func TestGenerateEmptyText(t *testing.T) {
 			"expected an error but not nil",
 		)
 	}
+}
+
+func TestGenerateBodyWithEmptyLinkSet(t *testing.T) {
+	s := []linksrc.Set{
+		{
+			Name:  "My ePublication",
+			Items: []linksrc.LinkItem{},
+		},
+	}
+
+	ed := EmailData{
+		linkSets: s,
+		mtx:      &sync.Mutex{},
+	}
+
+	bod, err := ed.GenerateBody()
+
+	if err != nil {
+		t.Errorf("unexpected error generating an email body: %v", err)
+	}
+
+	if !strings.Contains(bod, "could not find any links") {
+		t.Error("the email did not tell the user that we couldn't find links")
+	}
+
+}
+func TestGenerateTextWithEmptyLinkSet(t *testing.T) {
+	s := []linksrc.Set{
+		{
+			Name:  "My ePublication",
+			Items: []linksrc.LinkItem{},
+		},
+	}
+
+	ed := EmailData{
+		linkSets: s,
+		mtx:      &sync.Mutex{},
+	}
+
+	bod, err := ed.GenerateText()
+
+	if err != nil {
+		t.Errorf("unexpected error generating an email body: %v", err)
+	}
+
+	if !strings.Contains(bod, "could not find any links") {
+		t.Error("the email did not tell the user that we couldn't find links")
+	}
+
 }
 
 // GenerateText straightforwardly populates a template and takes no input. As
@@ -195,12 +237,6 @@ func TestGenerateText(t *testing.T) {
 
 		if err != nil {
 			t.Errorf("couldn't write to the golden file: %v", err)
-		}
-
-		// testing-internal error: shouldn't happen unless there's an issue
-		// with your filesystem
-		if err != nil {
-			t.Errorf("error creating the golden file: %v", err)
 		}
 
 		// Don't check the in-memory text against the file we just created
