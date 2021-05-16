@@ -324,6 +324,106 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 
 }
 
+func TestMaxLinkLimits(t *testing.T) {
+	stopIntervalS := 7
+	pollIntervalS := 5
+	maxLinksInEmail := 5
+	epubs := 1
+	linksPerPub := 10
+	testenv, err := startTestEnvironment(testEnvironmentConfig{
+		numHTTPServers:  epubs,
+		numLinks:        linksPerPub,
+		mailHogPath:     mailHogPath,
+		mailHogHTTPPort: mailHogHTTPPort,
+		mailHogSMTPPort: mailHogSMTPPort,
+	})
+
+	defer testenv.tearDown()
+
+	if err != nil {
+		t.Fatalf("error starting test environment: %v", err)
+	}
+
+	// Configure link site checks for each fake e-publicaiton we've spun up.
+	urls := testenv.urls()
+	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	for i := range urls {
+		// not expecting errors since these URLs are guaranteed to be
+		// for running servers, and don't come from user input
+		pu, _ := url.Parse(urls[i])
+
+		u[i] = mockLinksrcInfo{
+			URL:      urls[i],
+			Name:     fmt.Sprintf("site-%v", pu.Port()),
+			MaxItems: 5,
+		}
+	}
+
+	err = createAppConfig(
+		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+		appConfigOptions{
+			SMTPServerAddress: testenv.testSMTPServer.smtpAddress(),
+			LinkSources:       u,
+			StorageDir:        testenv.tempDirPath,
+			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			KeyTTL:            "168h", // no cleanup expected during the test
+		},
+	)
+	if err != nil {
+		panic(fmt.Sprintf("can't create the app config: %v", err))
+	}
+
+	// Run the application from the entrypoint with our new config
+	cmd := exec.Command(
+		appPath,
+		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
+	)
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	if err = cmd.Start(); err != nil {
+		t.Fatalf("couldn't start the app: %v", err)
+	}
+
+	// Wait for the application to poll the link site, check for emails,
+	// update the application, wait another poll interval, and check
+	// for emails again.
+	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	err = cmd.Process.Signal(os.Interrupt)
+	// At this point you need to find the process and kill it manually.
+	// This messes up the test, so we panic.
+	if err != nil {
+		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
+	}
+
+	// it's okay for the application to exit with an error--we want to proceed
+	// with the test suite so we can get visibility into those errors
+	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
+		t.Fatalf("couldn't stop the application process: %v", err)
+	}
+
+	em, err := testenv.retrieveEmails(0)
+	if err != nil {
+		t.Errorf("could not retrieve emails: %v", err)
+	}
+	if len(em) == 0 {
+		t.Fatal("retrieved zero emails")
+	}
+	bod := em[0] // should just be one email at this point
+
+	links := extractItems(bod)
+
+	if len(links) > maxLinksInEmail {
+		t.Errorf(
+			"expecting %v links in the email, but got %v",
+			maxLinksInEmail,
+			len(links),
+		)
+	}
+
+}
+
 // totalBadgerDataFileSize gets the total size of all the VLOG and SSt files in
 // a directory in bytes.
 //

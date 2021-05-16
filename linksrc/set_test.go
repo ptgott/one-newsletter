@@ -209,3 +209,65 @@ func TestNewSet(t *testing.T) {
 		})
 	}
 }
+
+func TestNewSetWithMaxLinks(t *testing.T) {
+	tests := []struct {
+		name          string
+		conf          Config
+		wantSetLength int
+		wantErr       bool
+	}{
+		{
+			name: "returned links over max link count",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+				MaxItems:        2,
+			},
+			wantSetLength: 2,
+			wantErr:       false,
+		},
+		{
+			name: "returned links under max link count",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+				MaxItems:        5,
+			},
+			wantSetLength: 3,
+			wantErr:       false,
+		},
+		{
+			name: "no max link count",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+				MaxItems:        0,
+			},
+			wantSetLength: 3,
+			wantErr:       false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := bytes.NewBuffer([]byte(testHTML))
+			got, err := NewSet(r, tt.conf)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewSet() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if len(got.Items) != tt.wantSetLength {
+				t.Errorf("wanted a Set with %v links but got %v", tt.wantSetLength, got)
+			}
+		})
+	}
+}

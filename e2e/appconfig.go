@@ -26,8 +26,9 @@ type appConfigOptions struct {
 //
 // Fields are exported so we can use them in templates.
 type mockLinksrcInfo struct {
-	URL  string
-	Name string
+	URL      string
+	Name     string
+	MaxItems int
 }
 
 // createAppConfig writes a configuration YAML doc to the given path.
@@ -45,6 +46,7 @@ link_sources:
       itemSelector: "ul li"
       captionSelector: "p"
       linkSelector: "a"
+      maxItems: {{ .MaxItems }}
 {{ end }}
 polling:
     interval: {{ .PollInterval }}

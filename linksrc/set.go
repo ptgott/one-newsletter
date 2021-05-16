@@ -30,12 +30,22 @@ func NewSet(r io.Reader, conf Config) (Set, error) {
 
 	// Get all items listing content to link to
 	ls := conf.ItemSelector.MatchAll(n)
+	var limit uint
 
-	v := make([]LinkItem, len(ls))
+	if conf.MaxItems == 0 || len(ls) < int(conf.MaxItems) {
+		// i.e., disregard the limit if it doesn't apply
+		limit = uint(len(ls))
+	} else {
+		limit = conf.MaxItems
+	}
 
-	// Find the link URL and caption for each list item.
-	for i, li := range ls {
-		ns := conf.LinkSelector.MatchAll(li)
+	// Find the link URL and caption for each list item. Note that if the
+	// number of list items we scraped is over the limit, we'll arbitrarily
+	// exclude some list items from our search by making the length of our
+	// final result slice less than the length of the initial result slice.
+	v := make([]LinkItem, limit)
+	for i := range v {
+		ns := conf.LinkSelector.MatchAll(ls[i])
 		if len(ns) > 1 {
 			// The selector is ambiguous--skip this item
 			return Set{}, errors.New("ambiguous link selector")
@@ -63,7 +73,7 @@ func NewSet(r io.Reader, conf Config) (Set, error) {
 			}
 		}
 
-		cs := conf.CaptionSelector.MatchAll(li)
+		cs := conf.CaptionSelector.MatchAll(ls[i])
 		var caption string
 		if len(cs) == 0 {
 			// No captions in this item--skip it

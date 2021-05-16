@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	css "github.com/andybalholm/cascadia"
@@ -28,6 +29,9 @@ type Config struct {
 	// CSS selector for the actual link within a link item. Should be an
 	// "a" element. Relative to ItemSelector.
 	LinkSelector css.Selector
+	// Maximum number of Items in a Set. If a scraper returns more than this
+	// within a link site, Items will be chosen arbitrarily.
+	MaxItems uint
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface. Validation is
@@ -85,6 +89,21 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return fmt.Errorf("can't parse link selector: %v", err)
 	}
 	c.LinkSelector = ls
+
+	var mi uint
+	if _, mok := v["maxItems"]; !mok {
+		mi = 5 // Set a low default so we don't accidentally process a ton of links
+	} else {
+		mii, err := strconv.Atoi(v["maxItems"])
+
+		if err != nil || mii < 0 {
+			return fmt.Errorf("invalid maxItems: must be a positive integer")
+		} else {
+			mi = uint(mii)
+		}
+
+		c.MaxItems = mi
+	}
 
 	return nil
 

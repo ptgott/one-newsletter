@@ -20,7 +20,31 @@ func TestUnmarshalYAML(t *testing.T) {
 url: http://127.0.0.1:38911
 itemSelector: "ul li"
 captionSelector: "p"
-linkSelector: "a"`,
+linkSelector: "a"
+maxItems: 5
+`,
+		},
+		{
+			description:   "negative max items",
+			shouldBeError: true,
+			input: `name: site-38911
+url: http://127.0.0.1:38911
+itemSelector: "ul li"
+captionSelector: "p"
+linkSelector: "a"
+maxItems: -5
+`,
+		},
+		{
+			description:   "non-integer max items",
+			shouldBeError: true,
+			input: `name: site-38911
+url: http://127.0.0.1:38911
+itemSelector: "ul li"
+captionSelector: "p"
+linkSelector: "a"
+maxItems: 2.8
+`,
 		},
 		{
 			description:   "not an object",
