@@ -176,6 +176,56 @@ func TestGenerateTextWithEmptyLinkSet(t *testing.T) {
 
 }
 
+func TestGenerateBodyWithNon200Status(t *testing.T) {
+	s := []linksrc.Set{
+		{
+			Name:   "My ePublication",
+			Items:  []linksrc.LinkItem{},
+			Status: linksrc.StatusMiscClientError,
+		},
+	}
+
+	ed := EmailData{
+		linkSets: s,
+		mtx:      &sync.Mutex{},
+	}
+
+	bod, err := ed.GenerateBody()
+
+	if err != nil {
+		t.Errorf("unexpected error generating an email body: %v", err)
+	}
+
+	if !strings.Contains(bod, "error") {
+		t.Error("the email did not mention an error as expected")
+	}
+}
+
+func TestGenerateTextWithNon200Status(t *testing.T) {
+	s := []linksrc.Set{
+		{
+			Name:   "My ePublication",
+			Items:  []linksrc.LinkItem{},
+			Status: linksrc.StatusMiscClientError,
+		},
+	}
+
+	ed := EmailData{
+		linkSets: s,
+		mtx:      &sync.Mutex{},
+	}
+
+	bod, err := ed.GenerateText()
+
+	if err != nil {
+		t.Errorf("unexpected error generating an email body: %v", err)
+	}
+
+	if !strings.Contains(bod, "error") {
+		t.Error("the email text did not mention an error as expected")
+	}
+}
+
 // GenerateText straightforwardly populates a template and takes no input. As
 // a result, there's not much that can go wrong. Still, we want to catch
 // regressions, so we'll use a golden file here. To update the golden file,

@@ -71,6 +71,7 @@ func TestNewSet(t *testing.T) {
 	tests := []struct {
 		name    string
 		conf    Config
+		code    int
 		want    Set
 		wantErr bool
 	}{
@@ -194,11 +195,58 @@ func TestNewSet(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "400 status code",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+			},
+			code:    400,
+			wantErr: false,
+			want: Set{
+				Name:   "My Cool Publication",
+				Items:  []LinkItem{},
+				Status: StatusMiscClientError,
+			},
+		},
+		{
+			name: "500 status code",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+			},
+			code:    500,
+			wantErr: false,
+			want: Set{
+				Name:   "My Cool Publication",
+				Items:  []LinkItem{},
+				Status: StatusServerError,
+			},
+		},
+		{
+			name: "unexpected status code",
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             *(mustParseURL("http://www.example.com")),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+			},
+			code:    700,
+			wantErr: true,
+			want:    Set{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := bytes.NewBuffer([]byte(testHTML))
-			got, err := NewSet(r, tt.conf)
+			got, err := NewSet(r, tt.conf, tt.code)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewSet() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -214,6 +262,7 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 	tests := []struct {
 		name          string
 		conf          Config
+		code          int
 		wantSetLength int
 		wantErr       bool
 	}{
@@ -260,7 +309,7 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := bytes.NewBuffer([]byte(testHTML))
-			got, err := NewSet(r, tt.conf)
+			got, err := NewSet(r, tt.conf, tt.code)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewSet() error = %v, wantErr %v", err, tt.wantErr)
 				return

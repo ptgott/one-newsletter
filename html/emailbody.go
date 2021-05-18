@@ -8,6 +8,52 @@ import (
 	"sync"
 )
 
+// BodySectionContent is used to populate email body templates
+type BodySectionContent struct {
+	PubName string
+	Items   []linksrc.LinkItem
+	Status  string
+}
+
+// NewBodySectionContent readies a linksrc.Set for inclusion in an email body.
+// We want to keep linksrc.Set as close as possible to what a scraper had
+// originally parsed, and BodySectionContent as close as possible to what
+// a reader would want to see, while decoupling the two.
+func NewBodySectionContent(s linksrc.Set) BodySectionContent {
+	bsc := BodySectionContent{
+		Items:   s.Items,
+		PubName: s.Name,
+	}
+
+	if s.Status == linksrc.StatusOK && len(s.Items) == 0 {
+		bsc.Status = "We could not find any links for this site! You might want to check your configuration."
+		return bsc
+	} else if s.Status == linksrc.StatusOK {
+		bsc.Status = "Here are the latest links:"
+		return bsc
+	}
+
+	errPreamble := "We could not find any links because of an error"
+	errorMessages := map[linksrc.Status]string{
+		linksrc.StatusNotAllowed:      ": we don't have permission to get links from this website. Check your configuration.",
+		linksrc.StatusNotFound:        ": we couldn't find the website at this URL. Maybe it changed?",
+		linksrc.StatusRateLimited:     ": we're being rate limited. You should change your configuration to check this site less frequently.",
+		linksrc.StatusMiscClientError: "with our request to the site. Try reaching the site manually for more information.",
+		linksrc.StatusServerError:     "with the site itself. Try reaching the site manually for more information.",
+	}
+
+	m, ok := errorMessages[s.Status]
+	if !ok {
+		// This assumes a linksrc.Status we haven't anticipated here.
+		bsc.Status = errPreamble + ". Try reaching the site manually for more information."
+		return bsc
+	}
+	bsc.Status = errPreamble + m
+
+	return bsc
+
+}
+
 // Template meant to be populated with a []linksrc.Set
 // Using tables for layout to avoid cross-client irregularities.
 // See here for best practices:
@@ -18,13 +64,12 @@ const emailBodyHTML = `<html>
 <body>
 	<table>
 		<tbody>
-			<tr><h1>Here are the latest links:</h1>
+			<h1>Here are some new links!</h1>
 			{{ range . }}
-				<h2>{{.Name}}</h2>
+				<h2>{{ .PubName }}</h2>
+				<p>{{ .Status }}</p>
 				{{ range .Items }}
-					<p>{{.Caption}} (<a href="{{.LinkURL}}">here</a>)</p>
-				{{ else }}
-					<p>We could not find any links for this site! You might want to check your configuration.</p>
+					<p>{{ .Caption }} (<a href="{{ .LinkURL }}">here</a>)</p>
 				{{ end }}
 			{{ end }}
 		</tbody>
@@ -34,16 +79,15 @@ const emailBodyHTML = `<html>
 
 // Template meant to be populated with a []linksrc.Set.
 // Meant to satisfy the text/plain MIME type.
-const emailBodyText = `Here are the latest links:
-{{ range . }}
-{{.Name}}
+const emailBodyText = `{{ range . }}
+{{.PubName}}
+
+{{.Status}}
 {{ range .Items }}
 - {{.Caption}}
   {{.LinkURL}}
-{{ else }}
-  We could not find any links for this site! You might want to check your configuration.
-{{ end }}
 
+{{ end }}
 {{ end }}
 `
 
@@ -81,7 +125,9 @@ func (ed *EmailData) GenerateBody() (string, error) {
 	ed.mtx.Lock()
 	defer ed.mtx.Unlock()
 
-	if len(ed.linkSets) == 0 {
+	ls := ed.LinkSets()
+
+	if len(ls) == 0 {
 		return "",
 			errors.New(
 				"can't generate an email body from empty data",
@@ -93,7 +139,12 @@ func (ed *EmailData) GenerateBody() (string, error) {
 	// The template text is constant, so suppressing the error
 	tmpl, _ := template.New("body").Parse(emailBodyHTML)
 
-	tmpl.Execute(&buf, ed.LinkSets())
+	bc := make([]BodySectionContent, len(ls), len(ls))
+	for i := range ls {
+		bc[i] = NewBodySectionContent(ls[i])
+	}
+
+	tmpl.Execute(&buf, bc)
 
 	return string(buf.Bytes()), nil
 }
@@ -105,7 +156,9 @@ func (ed *EmailData) GenerateText() (string, error) {
 	ed.mtx.Lock()
 	defer ed.mtx.Unlock()
 
-	if len(ed.linkSets) == 0 {
+	ls := ed.LinkSets()
+
+	if len(ls) == 0 {
 		return "",
 			errors.New(
 				"can't generate an email text body from empty data",
@@ -117,7 +170,12 @@ func (ed *EmailData) GenerateText() (string, error) {
 	// The template text is constant, so suppressing the error
 	tmpl, _ := template.New("body").Parse(emailBodyText)
 
-	tmpl.Execute(&buf, ed.LinkSets())
+	bc := make([]BodySectionContent, len(ls), len(ls))
+	for i := range ls {
+		bc[i] = NewBodySectionContent(ls[i])
+	}
+
+	tmpl.Execute(&buf, bc)
 
 	return string(buf.Bytes()), nil
 }

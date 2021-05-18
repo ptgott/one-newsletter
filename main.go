@@ -109,13 +109,16 @@ func main() {
 					ec chan error,
 				) {
 					defer g.Done()
+					// Try the scrape request only once. If we get a non-2xx
+					// response, it's probably not something we can expect to
+					// clear up after retrying.
 					r, err := httpClient.Client.Get(lc.URL.String())
 					if err != nil {
 						ec <- err
 						return
 					}
 					defer r.Body.Close()
-					s, err := linksrc.NewSet(r.Body, lc)
+					s, err := linksrc.NewSet(r.Body, lc, r.StatusCode)
 					if err != nil {
 						ec <- err
 						return
@@ -131,8 +134,9 @@ func main() {
 				Msg("done with one round of scraping")
 			for set := range emailBuildCh {
 				newSet := linksrc.Set{
-					Name:  set.Name,
-					Items: []linksrc.LinkItem{},
+					Name:   set.Name,
+					Items:  []linksrc.LinkItem{},
+					Status: set.Status,
 				}
 				// See if any items are missing in the db. If so, store them
 				// and add them to a new email body.

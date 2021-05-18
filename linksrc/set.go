@@ -2,14 +2,60 @@ package linksrc
 
 import (
 	"errors"
+	"fmt"
 	"io"
 
 	"golang.org/x/net/html"
 )
 
+type Status int
+
+const (
+	StatusOK         Status = iota
+	StatusNotAllowed        // HTTP 401 or 403
+	StatusNotFound
+	StatusRateLimited     // HTTP 429
+	StatusMiscClientError // Uncategorized HTTP 4xx
+	StatusServerError     // Treating all HTTP 5xx errors the same
+)
+
 // NewSet initializes a new collection of listed link items for an HTML
-// document Reader and link source configuration.
-func NewSet(r io.Reader, conf Config) (Set, error) {
+// document Reader, link source configuration, and HTTP status code. The
+// code defaults to 200 if left unspecified.
+func NewSet(r io.Reader, conf Config, code int) (Set, error) {
+	var s Set
+
+	codeToStatus := map[int]Status{
+		0:   StatusOK, // the default
+		200: StatusOK,
+		201: StatusOK,
+		401: StatusNotAllowed,
+		403: StatusNotAllowed,
+		404: StatusNotFound,
+		429: StatusRateLimited,
+	}
+
+	c, ok := codeToStatus[code]
+
+	if !ok && code-(code%100) == 400 {
+		s.Status = StatusMiscClientError
+	} else if !ok && code-(code%100) == 500 {
+		s.Status = StatusServerError
+	} else if !ok {
+		return Set{}, fmt.Errorf("unexpected status code: %v", code)
+	} else {
+		s.Status = c
+	}
+
+	s.Name = conf.Name
+
+	// The rest of this function is just processing HTML, so bail early on
+	// unsuccessful responses.
+	if s.Status != StatusOK {
+		s.Items = []LinkItem{}
+		return s, nil
+	}
+
 	// Note that the following quick.Check function could not find an invalid
 	// input for html.Parse:
 	//
@@ -99,10 +145,7 @@ func NewSet(r io.Reader, conf Config) (Set, error) {
 		}
 	}
 
-	s := Set{
-		Name:  conf.Name,
-		Items: v,
-	}
+	s.Items = v
 
 	return s, nil
 
@@ -112,4 +155,8 @@ func NewSet(r io.Reader, conf Config) (Set, error) {
 type Set struct {
 	Name  string // probably the publication the links came from
 	Items []LinkItem
+	// Since a Set represents the results of a scrape, we need to
+	// represent the HTTP status so Set consumers can put any
+	// unexpected results in context.
+	Status
 }

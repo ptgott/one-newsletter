@@ -2,8 +2,6 @@
 
 ## Required for deployment
 
-1. Handle more complex client situations when polling e-publications, such as retries and non-2xx responses. (Currently this has no defensive measures at all--we just call `http.Client.Get` in `main.go`) Research common pitfalls with web scraping.
-
 1. Come up with a release process. Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
 
 ## Can be done after deployment
