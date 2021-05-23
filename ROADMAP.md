@@ -1,9 +1,9 @@
 # ROADMAP
 
-## Required for deployment
-- Benchmark memory/CPU usage while polling websites and sending an email. Make sure this is small enough to accommodate 1GB of RAM and 1vCPU (and with other stuff running on the same box).
+## Can be done after deployment:
 
-## Can be done after deployment
+1. Document all configuration options in the README
+
 1. Come up with a release process (i.e., to make it easier for people to use this without building from source). Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
 
 1. Add a Makefile with “test-unit” and “test-e2e” targets

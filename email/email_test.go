@@ -7,7 +7,6 @@ import (
 	"io"
 	"math/rand"
 	"net"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,34 +29,93 @@ func TestUnmarshalYAML(t *testing.T) {
 		shouldBeError bool
 	}{
 		{
-			description: "valid case",
-			input: `smtpServerAddress: 0.0.0.0:123
+			description: "valid basic case",
+			input: `type: basic
+smtpServerAddress: 0.0.0.0:123
 fromAddress: mynewsletter@example.com
 toAddress: recipient@example.com`,
 			shouldBeError: false,
 		},
 		{
-			description: "no to address",
-			input: `smtpServerAddress: 0.0.0.0:123
-fromAddress: mynewsletter@example.com`,
-			shouldBeError: true,
-		},
-		{
-			description: "no from address",
-			input: `smtpServerAddress: 0.0.0.0:123
+			description: "valid sendgrid case",
+			input: `type: sendgrid
+apikey: abcdefgHIJKLMNOP012345679
+fromAddress: mynewsletter@example.com
 toAddress: recipient@example.com`,
-			shouldBeError: true,
+			shouldBeError: false,
 		},
 		{
-			description: "remote server address",
-			input: `smtpServerAddress: 123.123.123:123
+			description: "sendgrid case with space in the API key",
+			input: `type: sendgrid
+apikey: abcdefgHIJKL MNOP012345679
 fromAddress: mynewsletter@example.com
 toAddress: recipient@example.com`,
 			shouldBeError: true,
 		},
 		{
+			description: "sendgrid case with tab in the API key",
+			input: `type: sendgrid
+apikey: abcdefgHIJKL	MNOP012345679
+fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "sendgrid case with a special character in the API key",
+			input: `type: sendgrid
+apikey: abcdefgHIJKL*MNOP012345679
+fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "sendgrid and no API key",
+			input: `type: sendgrid
+fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "no to address",
+			input: `type: basic
+smtpServerAddress: 0.0.0.0:123
+fromAddress: mynewsletter@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "no type",
+			input: `smtpServerAddress: 0.0.0.0:123
+fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "unrecognized type",
+			input: `type: 123456
+smtpServerAddress: 0.0.0.0:123
+fromAddress: mynewsletter@example.com
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
+			description: "sendgrid type with no address",
+			input: `type: sendgrid
+fromAddress: mynewsletter@example.com
+apikey: abcdefgHIJKLMNOP012345679
+toAddress: recipient@example.com`,
+			shouldBeError: false,
+		},
+		{
+			description: "no from address",
+			input: `type: basic
+smtpServerAddress: 0.0.0.0:123
+toAddress: recipient@example.com`,
+			shouldBeError: true,
+		},
+		{
 			description: "no server address",
-			input: `fromAddress: mynewsletter@example.com
+			input: `type: basic
+fromAddress: mynewsletter@example.com
 toAddress: recipient@example.com`,
 			shouldBeError: true,
 		},
@@ -85,127 +143,6 @@ toAddress: recipient@example.com`,
 			}
 		})
 	}
-}
-
-func TestIsLocal(t *testing.T) {
-	testCases := []struct {
-		description    string
-		input          string
-		expectedResult bool
-	}{
-		{
-			description:    "localhost",
-			input:          "localhost",
-			expectedResult: true,
-		},
-		{
-			description:    "loopback IP",
-			input:          "127.0.0.1",
-			expectedResult: true,
-		},
-		{
-			description:    "all zeros",
-			input:          "0.0.0.0",
-			expectedResult: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.description, func(t *testing.T) {
-			res := isLocal(tc.input)
-
-			if res != tc.expectedResult {
-				t.Errorf(
-					"unexpected result for input %v: wanted %v but got %v",
-					tc.input,
-					tc.expectedResult,
-					res,
-				)
-			}
-		})
-	}
-
-}
-
-func TestNewSMTPClient(t *testing.T) {
-	testCases := []struct {
-		description      string
-		shouldRaiseError bool
-		userConfig       UserConfig
-	}{
-		{
-			description:      "valid case with a local SMTP server",
-			shouldRaiseError: false,
-			userConfig: UserConfig{
-				SMTPServerAddress: "smtp://localhost:587",
-				FromAddress:       "no-reply@example.com",
-				ToAddress:         "me@example.com",
-			},
-		},
-		{
-			description:      "valid local case with no url scheme",
-			shouldRaiseError: false,
-			userConfig: UserConfig{
-				SMTPServerAddress: "localhost:587",
-				FromAddress:       "no-reply@example.com",
-				ToAddress:         "me@example.com",
-			},
-		},
-		{
-			description:      "local case with no address",
-			shouldRaiseError: true,
-			userConfig: UserConfig{
-				FromAddress: "no-reply@example.com",
-				ToAddress:   "me@example.com",
-			},
-		},
-		{
-			description:      "no from address",
-			shouldRaiseError: true,
-			userConfig: UserConfig{
-				SMTPServerAddress: "smtp://localhost:587",
-				ToAddress:         "me@example.com",
-			},
-		},
-		{
-			description:      "no to address",
-			shouldRaiseError: true,
-			userConfig: UserConfig{
-				SMTPServerAddress: "smtp://localhost:587",
-				FromAddress:       "no-reply@example.com",
-			},
-		},
-		{
-			description:      "bad SMTP server address",
-			shouldRaiseError: true,
-			userConfig: UserConfig{
-				// newline character
-				SMTPServerAddress: string(rune(0x0a)),
-				FromAddress:       "no-reply@example.com",
-				ToAddress:         "me@example.com",
-			},
-		},
-	}
-
-	defer func() {
-		os.RemoveAll(testkeypath)
-		os.RemoveAll(testcertpath)
-	}()
-
-	for _, tc := range testCases {
-		t.Run(tc.description, func(t *testing.T) {
-			_, err := NewSMTPClient(&tc.userConfig)
-			if (err != nil) != tc.shouldRaiseError {
-				t.Errorf("%v: expected error status %v but got %v with error %v",
-					tc.description,
-					tc.shouldRaiseError,
-					err != nil,
-					err,
-				)
-			}
-		})
-	}
-
 }
 
 // smtpSender is shamelessly copied from Go's smtp package to wrap SMTP's
@@ -298,11 +235,11 @@ func TestSend(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	p := rand.Intn(1000) + 1000 // quasi-random port > 1000
 
-	cli := SMTPClient{
-		fromAddress: "me@example.com",
-		toAddress:   "you@example.com",
-		smtpHost:    "localhost",
-		smtpPort:    strconv.Itoa(p),
+	uc := UserConfig{
+		FromAddress:       "me@example.com",
+		ToAddress:         "you@example.com",
+		SMTPServerAddress: "localhost:" + strconv.Itoa(p),
+		Type:              BasicType,
 	}
 
 	srv, err := net.Listen("tcp4", fmt.Sprintf("localhost:%v", p))
@@ -328,7 +265,7 @@ func TestSend(t *testing.T) {
 		serveFakeSMTP(conn, dc)
 	}(srv, d, errCh)
 
-	err = cli.SendNewsletter(bodText, bodHTML)
+	err = uc.SendNewsletter(bodText, bodHTML)
 
 	if err != nil {
 		t.Fatalf(

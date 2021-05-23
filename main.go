@@ -1,7 +1,6 @@
 package main
 
 import (
-	"divnews/email"
 	"divnews/html"
 	"divnews/linksrc"
 	"divnews/poller"
@@ -65,15 +64,6 @@ func main() {
 	}
 
 	log.Info().Str("configPath", *configPath).Msg("successfully validated the config")
-
-	smtpCl, err := email.NewSMTPClient(config.EmailSettings)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Msg("Problem setting up the email client")
-		os.Exit(1)
-	}
-	log.Info().Msg("set up the SMTP client successfully")
 
 	errCh := make(chan error) // errors to print
 
@@ -189,7 +179,7 @@ func main() {
 			}
 			log.Info().
 				Msg("attempting to send an email")
-			err = smtpCl.SendNewsletter([]byte(txt), []byte(bod))
+			err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
 			if err != nil {
 				log.Error().Err(err).Msg("error sending an email")
 				continue

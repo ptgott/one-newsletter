@@ -26,6 +26,7 @@ email:
     smtpServerAddress: 0.0.0.0:123
     fromAddress: mynewsletter@example.com
     toAddress: recipient@example.com
+    type: basic
 link_sources:
 
     - name: site-38911

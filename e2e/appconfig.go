@@ -39,6 +39,7 @@ email:
     smtpServerAddress: {{ .SMTPServerAddress }}
     fromAddress: mynewsletter@example.com
     toAddress: recipient@example.com
+    type: basic
 link_sources:
 {{ range .LinkSources }}
     - name: {{ .Name }}
