@@ -1,14 +1,12 @@
 # ROADMAP
 
 ## Required for deployment
-
-1. Come up with a release process. Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
+- Benchmark memory/CPU usage while polling websites and sending an email. Make sure this is small enough to accommodate 1GB of RAM and 1vCPU (and with other stuff running on the same box).
 
 ## Can be done after deployment
+1. Come up with a release process (i.e., to make it easier for people to use this without building from source). Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
 
-1. Add a makefile with “test-unit” and “test-e2e” targets
-
-1. Add inline `<style>` tags to the email HTML to achieve styling.
+1. Add a Makefile with “test-unit” and “test-e2e” targets
 
 1. Add more documentation:
 
