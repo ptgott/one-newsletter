@@ -1,17 +1,30 @@
 # ROADMAP
 
-## Can be done after deployment:
+After verifying that the application can send emails while deployed, do the following:
 
-1. Document all configuration options in the README
+1. Need to remove references to a `cleanupInterval` in test configs.
+
+1. The links fetched via `linkSelector` are likely to be relative. Make sure the application fills in scraped links with a website's base URL if this is missing.
+
+1. Add a “-test” flag, which instructs the application to read the user config and open a sample email body in a local browser, skipping any database reads/writes. This way, a user can make sure their config is correct without having to wait for the application to generate a newsletter.
+
+1. Some sites, e.g., thekitchn.com, detect automation tools via the `User-Agent` header and refuse to show content if this is the case. Note that it’s often easy to bypass this restriction by using a `User-Agent` header copied from a legit Chrome request. But is that okay/legal?
+
+1. Account for the possibility that some sites are dynamic. Maybe use a headless browser for all requests, rather than Go's HTTP client?
+
+1. Provide an opt out option for users, to prevent mis-sent email issues! This probably means exposing an HTTP API.
+
+1. Consider providing an option to update user configs via HTTP endpoint.
+
+1. Add more documentation:
+
+   - Document all configuration options in the README
+   - Update the README to describe the architecture of the application (what each package does and how they work together).
+   - Make sure there's an adequate `doc.go` for every package.
 
 1. Come up with a release process (i.e., to make it easier for people to use this without building from source). Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
 
 1. Add a Makefile with “test-unit” and “test-e2e” targets
-
-1. Add more documentation:
-
-   - Update the README to describe the architecture of the application (what each package does and how they work together).
-   - Make sure there's an adequate `doc.go` for every package.
 
 1. Consider using the lowest common ancestor approach shown [here](https://www.benawad.com/scraping-recipe-websites) to find lists of links automatically without requiring the user to specify this via a CSS selector.
 
