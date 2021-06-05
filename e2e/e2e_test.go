@@ -1,7 +1,7 @@
 package e2e
 
 import (
-	"encoding/json"
+	"divnews/smtptest"
 	"fmt"
 	"math/rand"
 	"net/url"
@@ -16,48 +16,10 @@ import (
 )
 
 var (
-	mailHogPath     string // path to the MailHog executable taken from user config
-	mailHogSMTPPort int
-	mailHogHTTPPort int
-	appPath         string // filled in later--path to the built application
+	appPath string // filled in later--path to the built application
 )
 
 func TestMain(m *testing.M) {
-	j, err := os.ReadFile("../e2e_config.json")
-	if err != nil {
-		panic(fmt.Sprintf("can't open the e2e config file: %v", err))
-	}
-	var opts map[string]interface{}
-	err = json.Unmarshal(j, &opts)
-	if err != nil {
-		panic(fmt.Sprintf("can't parse the e2e test config as json: %v", err))
-	}
-	v, ok := opts["mailhog_path"]
-	if !ok {
-		panic("the e2e config file must specify a mailhog_path")
-	}
-	if mailHogPath, ok = v.(string); !ok {
-		panic("mailhog_path must be a string")
-	}
-	n, ok := opts["mailhog_smtp_port"]
-	if !ok {
-		panic("the e2e config file must specify a mailhog_smtp_port")
-	}
-	n2, ok := n.(float64)
-	if !ok {
-		panic("mailhog_smtp_port must be a number")
-	}
-	mailHogSMTPPort = int(n2)
-	k, ok := opts["mailhog_http_port"]
-	if !ok {
-		panic("the e2e config file must specify a mailhog_http_port")
-	}
-	k2, ok := k.(float64)
-	if !ok {
-		panic("mailhog_http_port must be a number")
-	}
-	mailHogHTTPPort = int(k2)
-
 	// We need to build the application before we can run it. While
 	// executing "go run" in the test environment seems like a nice
 	// cross-platform choice, the main "go run" process isn't actually what
@@ -67,7 +29,7 @@ func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UnixNano())
 	appPath = fmt.Sprintf("./app%v", rand.Intn(1000))
 	bld := exec.Command("go", "build", "-o", appPath, "../main.go")
-	err = bld.Run()
+	err := bld.Run()
 	if err != nil {
 		panic(fmt.Sprintf("can't build the application: %v", err))
 	}
@@ -91,12 +53,9 @@ func TestNewsletterEmailSending(t *testing.T) {
 	pollIntervalS := 5
 	epubs := 3
 	linksPerPub := 5
-	testenv, err := startTestEnvironment(testEnvironmentConfig{
-		numHTTPServers:  epubs,
-		numLinks:        linksPerPub,
-		mailHogPath:     mailHogPath,
-		mailHogHTTPPort: mailHogHTTPPort,
-		mailHogSMTPPort: mailHogSMTPPort,
+	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
+		numHTTPServers: epubs,
+		numLinks:       linksPerPub,
 	})
 
 	defer testenv.tearDown()
@@ -122,7 +81,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 	err = createAppConfig(
 		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
 		appConfigOptions{
-			SMTPServerAddress: testenv.testSMTPServer.smtpAddress(),
+			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
@@ -162,7 +121,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 		t.Fatalf("couldn't stop the application process: %v", err)
 	}
 
-	ems, err := testenv.retrieveEmails(0)
+	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 
 	if err != nil {
 		t.Errorf("can't retrieve email from the test SMTP server: %v", err)
@@ -197,12 +156,9 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	// Ensure that all emails are the result of polling a single e-publication
 	epubs := 1
 	linksPerPub := 5
-	testenv, err := startTestEnvironment(testEnvironmentConfig{
-		numHTTPServers:  epubs,
-		numLinks:        linksPerPub,
-		mailHogPath:     mailHogPath,
-		mailHogHTTPPort: mailHogHTTPPort,
-		mailHogSMTPPort: mailHogSMTPPort,
+	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
+		numHTTPServers: epubs,
+		numLinks:       linksPerPub,
 	})
 
 	defer testenv.tearDown()
@@ -228,7 +184,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	err = createAppConfig(
 		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
 		appConfigOptions{
-			SMTPServerAddress: testenv.testSMTPServer.smtpAddress(),
+			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
@@ -256,7 +212,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	// update the application, wait another poll interval, and check
 	// for emails again.
 	time.Sleep(time.Duration(updateIntervalS) * time.Second)
-	em1, err := testenv.retrieveEmails(0)
+	em1, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
 		t.Errorf("could not retrieve emails before the update: %v", err)
 	}
@@ -267,7 +223,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 
 	log.Info().Msg("updating the mock link sites")
 	testenv.update(linksToUpdate)
-	ut := time.Now().Unix()
+	ut := time.Now().UnixNano()
 	log.Info().Msg("finished updating the mock link sites")
 	time.Sleep(time.Duration(stopIntervalS-updateIntervalS) * time.Second)
 	err = cmd.Process.Signal(os.Interrupt)
@@ -284,7 +240,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 		t.Fatalf("couldn't stop the application process: %v", err)
 	}
 
-	em2, err := testenv.retrieveEmails(ut)
+	em2, err := testenv.SMTPServer.RetrieveEmails(ut)
 	if err != nil {
 		t.Errorf("can't retrieve emails after the update: %v", err)
 	}
@@ -295,8 +251,8 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	// There should just be one email after filtering by time
 	after := em2[0]
 
-	linksBefore := extractItems(before)
-	linksAfter := extractItems(after)
+	linksBefore := smtptest.ExtractItems(before)
+	linksAfter := smtptest.ExtractItems(after)
 
 	if len(linksAfter) != linksToUpdate {
 		t.Errorf(
@@ -330,12 +286,9 @@ func TestMaxLinkLimits(t *testing.T) {
 	maxLinksInEmail := 5
 	epubs := 1
 	linksPerPub := 10
-	testenv, err := startTestEnvironment(testEnvironmentConfig{
-		numHTTPServers:  epubs,
-		numLinks:        linksPerPub,
-		mailHogPath:     mailHogPath,
-		mailHogHTTPPort: mailHogHTTPPort,
-		mailHogSMTPPort: mailHogSMTPPort,
+	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
+		numHTTPServers: epubs,
+		numLinks:       linksPerPub,
 	})
 
 	defer testenv.tearDown()
@@ -362,7 +315,7 @@ func TestMaxLinkLimits(t *testing.T) {
 	err = createAppConfig(
 		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
 		appConfigOptions{
-			SMTPServerAddress: testenv.testSMTPServer.smtpAddress(),
+			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
@@ -403,7 +356,7 @@ func TestMaxLinkLimits(t *testing.T) {
 		t.Fatalf("couldn't stop the application process: %v", err)
 	}
 
-	em, err := testenv.retrieveEmails(0)
+	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
 		t.Errorf("could not retrieve emails: %v", err)
 	}
@@ -412,7 +365,7 @@ func TestMaxLinkLimits(t *testing.T) {
 	}
 	bod := em[0] // should just be one email at this point
 
-	links := extractItems(bod)
+	links := smtptest.ExtractItems(bod)
 
 	if len(links) > maxLinksInEmail {
 		t.Errorf(
@@ -460,12 +413,9 @@ func TestDBcleanup(t *testing.T) {
 	epubs := 10
 	linksPerPub := 10
 
-	testenv, err := startTestEnvironment(testEnvironmentConfig{
-		numHTTPServers:  epubs,
-		numLinks:        linksPerPub,
-		mailHogPath:     mailHogPath,
-		mailHogHTTPPort: mailHogHTTPPort,
-		mailHogSMTPPort: mailHogSMTPPort,
+	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
+		numHTTPServers: epubs,
+		numLinks:       linksPerPub,
 	})
 
 	defer testenv.tearDown()
@@ -491,7 +441,7 @@ func TestDBcleanup(t *testing.T) {
 	err = createAppConfig(
 		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
 		appConfigOptions{
-			SMTPServerAddress: testenv.testSMTPServer.smtpAddress(),
+			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),

@@ -39,7 +39,9 @@ email:
     smtpServerAddress: {{ .SMTPServerAddress }}
     fromAddress: mynewsletter@example.com
     toAddress: recipient@example.com
-    type: basic
+    username: myuser
+    password: password123
+    skipCertVerification: true
 link_sources:
 {{ range .LinkSources }}
     - name: {{ .Name }}

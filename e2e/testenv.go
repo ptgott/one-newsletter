@@ -1,9 +1,11 @@
 package e2e
 
 import (
+	"divnews/smtptest"
 	"errors"
 	"fmt"
 	"os"
+	"testing"
 )
 
 const (
@@ -18,9 +20,6 @@ type testEnvironmentConfig struct {
 	numHTTPServers int // How many mock web publications to spin up
 	numLinks       int //How many links this application should be able to scrape from
 	// each web publication
-	mailHogPath     string // abs path to MailHog
-	mailHogSMTPPort int
-	mailHogHTTPPort int
 }
 
 // testEnvironment manages all dependencies required to simulate a "real"
@@ -28,7 +27,7 @@ type testEnvironmentConfig struct {
 // startTestEnvironment.
 type testEnvironment struct {
 	*testServerGroup
-	testSMTPServer
+	SMTPServer  smtptest.Server
 	tempDirPath string // must be populated programmatically
 }
 
@@ -38,7 +37,7 @@ type testEnvironment struct {
 // Note that if startTestEnvironment fails, it will return an error along with
 // whatever shreds of a test environment we've set up so far so you can tear
 // it down (i.e., it won't just be the zero value)
-func startTestEnvironment(c testEnvironmentConfig) (*testEnvironment, error) {
+func startTestEnvironment(t *testing.T, c testEnvironmentConfig) (*testEnvironment, error) {
 	te := &testEnvironment{}
 
 	p, err := os.MkdirTemp(".", tempDirPathName)
@@ -50,20 +49,15 @@ func startTestEnvironment(c testEnvironmentConfig) (*testEnvironment, error) {
 
 	te.tempDirPath = p
 
-	ts := &MailHog{
-		mailHogPath: c.mailHogPath,
-		smtpPort:    c.mailHogSMTPPort,
-		apiPort:     c.mailHogHTTPPort,
-	}
-
-	te.testSMTPServer = ts
-
-	// Starting the SMTP server is riskier than starting the HTTP test server since it
-	// runs in a separate process. Start it first before attempting to go further.
-	err = ts.start()
+	key, cert, err := smtptest.GenerateTLSFiles(t)
 	if err != nil {
-		return te, err
+		return nil, err
 	}
+	ts := smtptest.NewInProcessServer(key, cert)
+
+	te.SMTPServer = ts
+
+	go ts.Start()
 
 	sg := startTestServerGroup(c.numHTTPServers, c.numLinks)
 
@@ -75,8 +69,8 @@ func startTestEnvironment(c testEnvironmentConfig) (*testEnvironment, error) {
 // tearDown returns the testEnvironment to its state prior to start. Designed
 // to call with defer
 func (te *testEnvironment) tearDown() {
-	if te.testSMTPServer != nil {
-		te.testSMTPServer.close()
+	if te.SMTPServer != nil {
+		te.SMTPServer.Close()
 	}
 
 	if te.testServerGroup != nil {

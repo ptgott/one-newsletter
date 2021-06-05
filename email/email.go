@@ -3,23 +3,20 @@ package email
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"mime/multipart"
 	"net/smtp"
 	"net/textproto"
-	"regexp"
+	"net/url"
+	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 type localStatus int
 
 const smtpScheme string = "smtp://"
-
-type EmailClientType int
-
-const (
-	BasicType EmailClientType = iota
-	SendGridType
-)
 
 // UserConfig represents config options provided the user. Not meant to be used
 // directly for sending email without validation.
@@ -28,20 +25,21 @@ const (
 // accommodating the tls package which uses these.
 // https://golang.org/pkg/crypto/tls/#LoadX509KeyPair
 type UserConfig struct {
-	SMTPServerAddress string // optional unless using basic
-	FromAddress       string
-	ToAddress         string
-	ApiKey            string // optional unless using an SMTP API
-	Type              EmailClientType
+	SMTPServerHost string
+	SMTPServerPort string
+	FromAddress    string
+	ToAddress      string
+	UserName       string
+	Password       string
+	// Should only be used during testing. We can simulate all aspects of TLS
+	// in a test environment but certification verification, since any cert used
+	// by a test server would need to be self signed.
+	SkipCertVerification bool
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface. Validation is
 // performed here.
 func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	recognizedTypes := map[string]EmailClientType{
-		"basic":    BasicType,
-		"sendgrid": SendGridType,
-	}
 
 	v := make(map[string]string)
 	err := unmarshal(&v)
@@ -50,35 +48,39 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return errors.New("the email config must be an object")
 	}
 
-	tp, ok := v["type"]
-	if !ok {
-		return errors.New("the email config must specify a type")
+	// This option must not be used outside tests, so we don't enforce it.
+	scv, _ := v["skipCertVerification"]
+	if scv == "true" {
+		uc.SkipCertVerification = true
+		log.Warn().Msg(
+			"SKIPPING TLS CERTIFICATE VERIFICATION. THIS SHOULD BE A TEST ENVIRONMENT. YOU HAVE BEEN WARNED",
+		)
 	}
-
-	if _, ok := recognizedTypes[tp]; !ok {
-		return errors.New("unrecognized email client type: " + tp)
-	}
-
-	uc.Type = recognizedTypes[tp]
-
-	ak, ok := v["apikey"]
-	if !ok && uc.Type != BasicType {
-		return errors.New("must provide an apikey config option for SMTP APIs")
-	}
-
-	if !regexp.MustCompile("^[A-Za-z0-9]+$").MatchString(ak) && uc.Type != BasicType {
-		return errors.New("the API key must include only alphanumeric characters, with no whitespace")
-	}
-
-	uc.ApiKey = ak // empty string if not provided
 
 	ssa, ok := v["smtpServerAddress"]
-	// sendgrid has a fixed address
-	if !ok && tp != "sendgrid" {
+	if !ok {
 		return errors.New("email config must include the address of an SMTP server")
 	}
 
-	uc.SMTPServerAddress = ssa
+	// We allow users to omit the scheme, since smtpServerAddress is only for
+	// one protocol.
+	if !strings.HasPrefix(ssa, "smtp://") {
+		ssa = "smtp://" + ssa
+	}
+
+	u, err := url.Parse(ssa)
+
+	if err != nil {
+		return errors.New("the SMTP server address is not a valid URL: " + err.Error())
+	}
+
+	pr := u.Port()
+	if pr == "" {
+		return errors.New("the SMTP server address must include a port")
+	}
+
+	uc.SMTPServerHost = u.Hostname()
+	uc.SMTPServerPort = pr
 
 	fa, ok := v["fromAddress"]
 	if !ok {
@@ -91,6 +93,18 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return errors.New("email confic must include a \"to\" address for sending email")
 	}
 	uc.ToAddress = ta
+
+	un, ok := v["username"]
+	if !ok {
+		return errors.New("email config must include a username for the SMTP relay server or MTA")
+	}
+	uc.UserName = un
+
+	pw, ok := v["password"]
+	if !ok {
+		return errors.New("email config must include a password for the SMTP relay server or MTA")
+	}
+	uc.Password = pw
 	return nil
 }
 
@@ -99,25 +113,8 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // `text/html` type in asHTML. A lack of an error means the message was
 // received by the destination SMTP server.
 func (uc UserConfig) SendNewsletter(asText, asHTML []byte) error {
-	sendGridHost := "smtp.sendgrid.net"
-	var addr string
-	if uc.Type == SendGridType {
-		// https://sendgrid.com/docs/for-developers/sending-email/integrating-with-the-smtp-api/#smtp-ports
-		addr = sendGridHost + ":587"
-	} else {
-		addr = uc.SMTPServerAddress
-	}
 
-	var auth smtp.Auth
-
-	if uc.Type == SendGridType {
-		// Using username "apikey" with the user's API key as the password
-		// See:
-		// https://sendgrid.com/docs/for-developers/sending-email/integrating-with-the-smtp-api/
-		auth = smtp.PlainAuth("", "apikey", uc.ApiKey, sendGridHost)
-	} else {
-		auth = nil
-	}
+	auth := smtp.PlainAuth("", uc.UserName, uc.Password, uc.SMTPServerHost)
 
 	// Write the email body. It will have the following MIME entities.
 	// For more information see:
@@ -165,11 +162,62 @@ func (uc UserConfig) SendNewsletter(asText, asHTML []byte) error {
 	msg.Write(ab.Bytes()) // add the multipart body to the email message
 	msg.Flush()
 
-	return smtp.SendMail(
-		addr,
-		auth,
-		uc.FromAddress,
-		[]string{uc.ToAddress},
-		buf.Bytes(),
-	)
+	// Send the email. This is copied with minor adjustments from smtp.SendMail
+	// See: https://golang.org/src/net/smtp/smtp.go?s=9381:9459#L313
+
+	// Connect to the remote SMTP server.
+	c, err := smtp.Dial(uc.SMTPServerHost + ":" + uc.SMTPServerPort)
+	if err != nil {
+		log.Fatal().Err(err).Msg("cannot connect to the remote SMTP server")
+	}
+	defer c.Close()
+
+	if ok, _ := c.Extension("STARTTLS"); ok {
+		config := &tls.Config{
+			ServerName: uc.SMTPServerHost,
+			// For testing only, since we can't verify the self-signed cert used
+			// by our test server.
+			InsecureSkipVerify: uc.SkipCertVerification,
+		}
+		if err = c.StartTLS(config); err != nil {
+			return err
+		}
+	} else {
+		return errors.New("SMTP server does not support STARTTLS")
+	}
+
+	if ok, _ := c.Extension("AUTH"); !ok {
+		return errors.New("SMTP server doesn't support AUTH")
+	}
+	if err = c.Auth(auth); err != nil {
+		return err
+	}
+
+	if err := c.Mail(uc.FromAddress); err != nil {
+		return err
+	}
+
+	// Just using one recipient
+	if err := c.Rcpt(uc.ToAddress); err != nil {
+		return err
+	}
+
+	wc, err := c.Data()
+	if err != nil {
+		return err
+	}
+	_, err = wc.Write(buf.Bytes())
+	if err != nil {
+		return err
+	}
+	err = wc.Close()
+	if err != nil {
+		return err
+	}
+
+	err = c.Quit()
+	if err != nil {
+		return err
+	}
+	return nil
 }

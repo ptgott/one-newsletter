@@ -5,12 +5,14 @@ go 1.15
 require (
 	github.com/andybalholm/cascadia v1.2.0
 	github.com/dgraph-io/badger/v3 v3.2011.1
+	github.com/docker/go-units v0.4.0
+	github.com/emersion/go-smtp v0.15.0
+	github.com/flashmob/go-guerrilla v1.6.1
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/google/go-cmp v0.5.2 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/kr/pretty v0.2.0 // indirect
-	github.com/mailhog/data v1.0.1
 	github.com/rs/zerolog v1.20.0
 	github.com/stretchr/testify v1.6.1 // indirect
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b

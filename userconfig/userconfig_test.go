@@ -23,10 +23,11 @@ func TestParse(t *testing.T) {
 			shouldBeEmpty: false,
 			conf: `---
 email:
-    smtpServerAddress: 0.0.0.0:123
-    fromAddress: mynewsletter@example.com
-    toAddress: recipient@example.com
-    type: basic
+   smtpServerAddress: smtp://0.0.0.0:123
+   fromAddress: mynewsletter@example.com
+   toAddress: recipient@example.com
+   username: MyUser123
+   password: 123456-A_BCDE
 link_sources:
 
     - name: site-38911
