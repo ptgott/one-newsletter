@@ -1,0 +1,5 @@
+{
+    "mailhog_path": "/home/ptgott/go/bin/MailHog",
+    "mailhog_http_port": 5678,
+    "mailhog_smtp_port": 6767
+}

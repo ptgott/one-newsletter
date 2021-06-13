@@ -1,37 +1,87 @@
-# Divs to newsletters _!!_
+# One Newsletter
 
-## What is this?
-
-It's a self-hosted tool for creating email newsletters for websites that lack them, or websites that _do_ send email newsletters but in a format that rubs you the wrong way, or peppered with way too many ads. You'll get a plain-looking list of links and captions, and you'll be free to save them to Pocket, print them out, or whatever else you do with email newsletters.
+## A bento box for your media diet
+One Newsletter checks online newspapers, magazines, and blogs for updates and emails you a newsletter with the latest links. You can then save these to a read-it-later service like Pocket, send them to friends, or whatever else you do with links to content. Unlike traditional RSS readers, you can limit the number of links you receive for each publication so you don't get overwhelmed. And since One Newsletter scrapes the sites you want to check, you're not limited to sites with RSS feeds.
 
 ## How is it deployed?
+One Newsletter is designed to run on low-cost VMs (e.g., the least expensive [Digital Ocean VM](https://www.digitalocean.com/pricing/#standard-droplets)). Outside of the VM, the only required infrastructure is:
 
-The goal is to make this a lightweight binary that you can deploy to low-cost VMs (e.g., the least expensive [Digital Ocean VM](https://www.digitalocean.com/pricing/#standard-droplets) or t2.micro [spot instances](https://aws.amazon.com/ec2/spot/pricing/)). It should only be active once a day or so, make up to a few hundred HTTP requests, and parse a few KB of text.
+- **Persistent block storage:** One Newsletter keeps track of links it has already collected by storing them on disk via BadgerDB. You need to provide the path to a storage device that One Newsletter can use for BadgerDB's data directory.
 
-It's also meant to be stateless, so you can build it into a machine image, use a self-healing VM service like AWS Auto Scaling, not need to worry about interruption. (We're assuming you're okay receiving your email newsletters a few minutes late every now and then.)
+- **An SMTP relay server:** One Newsletter needs to connect to an SMTP server in order to send email. This can be a service like Mailgun or a local relay like Postfix if you're into that sort of thing.
 
-While it won't be designed for managed services like Google Cloud Run or AWS Lambda (mainly due to tales of [surprise DDoS-related bills and Google account lockouts](https://news.ycombinator.com/item?id=22027459)), it will be a single Go module that you can wrap with your Lambda function or deploy as a container to Cloud Run.
+## How to run it
+Run the following command:
 
-## Configuration
+```
+onenewsletter -config path/to/config.yaml
+```
 
-TODO: Add a guide to the YAML structure
+One Newsletter reads its configuration from the YAML file at the `-config` path. The file has the following structure.
 
-## Architecture
+```yaml
+# Configuration for the SMTP relay. The relay must advertise STARTTLS and
+# AUTH. One Newsletter negotiates a TLS connection and uses your username
+# and pasword to log in. Mutual TLS is currently not supported.
+email:
+   smtpServerAddress: smtp://0.0.0.0:123
+   fromAddress: mynewsletter@example.com
+   toAddress: recipient@example.com
+   username: MyUser123
+   password: 123456-A_BCDE
 
-The application needs to:
+# This section configures the way One Newsletter scrapes websites for links.
+# You must provide the interval at which One Newsletter checks for udpates and
+# sends the newsletter, using a format like 5000ms, 5s, 10m, or 24h. To help
+# prevent abuse, the minimum polling interval is 5s.
+polling:
+    interval: 168h # every seven days
 
-- Parse and validate configurations
-- Grab HTML from user-selected sites at scheduled intervals
-- Parse HTML into lists of links
-- Email lists of links to the user
+# The storage section tells OneNewsletter how to store information abouts links
+# it has already collected. "storageDir" is a path to a directory in which 
+# One Newsletter will store its data via BadgerDB. "keyTTL" indicates how long
+# each link will be stored in the database before it is deleted.
+storage:
+    storageDir: ./tempTestDir3012705204
+    keyTTL: "168h"
 
-### Storage layer
+# This section tells One Newsletter how to scrape websites for links. One
+# Newsletter tracks these as "link sources." The assumption is that each 
+# link source includes a menu of links (e.g., a "Most Read" list), and 
+# One Newsletter scrapes these menus for updates.
+#
+# You must include a name for each link source, and the URL of a web page
+# that includes a menu of links. You must also include the CSS selector of each
+# list item in the menu (itemSelector). Next, you must include two CSS selectors 
+# that are _relative to_ the itemSelector: one for the text that will accompany
+# each link in the newsletter (captionSelector), and one for the HTML hyperlink
+# reference (linkSelector).
+#
+# The following example tracks a site with a link menu that has the structure,
+# <ul>
+#   <li>
+#     <p>Here is a caption</p>
+#     <p>You can find more information<a href="/cool-story">here</a>.
+#   <li>
+#   <li>
+#     <p>Here is another caption</p>
+#     <p>You can find more information<a href="/cool-story2">here</a>.
+#   <li>
+# </ul>
+link_sources:
+    - name: site-38911
+      url: https://www.example.com
+      itemSelector: "ul li"
+      captionSelector: "p"
+      linkSelector: "a"
 
-Uses BadgerDB
+```
 
 ## Testing
+One Newsletter uses a mix of unit tests and end-to-end tests. Any new logic should be tested with unit tests unless it's not possible to do so. End-to-end tests live in the **e2e** directory. These run One Newsletter as a child process as well as an end-to-end testing process that includes separate goroutines for local HTTP and SMTP servers.
 
-For end-to-end tests, you need to have MailHog installed. Create a JSON file called **e2e_config.json** at the root of this directory. Include the following keys, which we're leaving to the developer to fill in depending on what's going on with their system:
-- `mailhog_path`: absolute path to the MailHog executable
-- `mailhog_http_port`: port used by MailHog for API requests
-- `mailhog_smtp_port`: port used by MailHog for SMTP traffic
+You can run all tests for One Newsletter from the project root with the following command:
+
+```
+go test ./...
+```

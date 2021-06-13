@@ -1,8 +1,6 @@
 # ROADMAP
 
-After verifying that the application can send emails while deployed, do the following:
-
-1. Need to remove references to a `cleanupInterval` in test configs.
+1. Need to remove references to a `cleanupInterval` in test configs. Also consider removing `keyTTL` as a config option. This should really always be the email send interval.
 
 1. The links fetched via `linkSelector` are likely to be relative. Make sure the application fills in scraped links with a website's base URL if this is missing.
 
@@ -15,13 +13,6 @@ After verifying that the application can send emails while deployed, do the foll
 1. Provide an opt out option for users, to prevent mis-sent email issues! This probably means exposing an HTTP API.
 
 1. Consider providing an option to update user configs via HTTP endpoint.
-
-1. Add more documentation:
-
-   - Add an example config YAML
-   - Document all configuration options in the README
-   - Update the README to describe the architecture of the application (what each package does and how they work together).
-   - Make sure there's an adequate `doc.go` for every package.
 
 1. Come up with a release process (i.e., to make it easier for people to use this without building from source). Change the module name to `www.github.com/ptgott/divnews`, including in all imports. Currently it's set to `divnews`.
 
