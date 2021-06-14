@@ -9,9 +9,6 @@ import (
 	css "github.com/andybalholm/cascadia"
 )
 
-// Using one HTML string in all unit tests. Just like
-// in a real case, we can't change the HTML we want to
-// scrape.
 const testHTML = `<!doctype html5>
 <html>
 <head>
@@ -27,7 +24,7 @@ const testHTML = `<!doctype html5>
 					<span class="itemNumber">1.</span>
 					<span class="itemName">This is a hot take!</span>
 				</span>
-				<a href="www.example.com/stories/hot-take">
+				<a href="http://www.example.com/stories/hot-take">
 				Click here
 				</a>
 			</li>
@@ -37,7 +34,7 @@ const testHTML = `<!doctype html5>
 					<span class="itemNumber">2.</span>
 					<span class="itemName">Stuff happened today, yikes.</span>
 				</span>
-				<a href="www.example.com/stories/stuff-happened">
+				<a href="http://www.example.com/stories/stuff-happened">
 				Click here
 				</a>
 			</li>
@@ -47,7 +44,52 @@ const testHTML = `<!doctype html5>
 					<span class="itemNumber">3.</span>
 					<span class="itemName">Is this supposition really true?</span>
 				</span>
-				<a href="www.example.com/storiesreally-true">
+				<a href="http://www.example.com/storiesreally-true">
+				Click here
+				</a>
+			</li>
+		<ul>
+	</div>
+</body>
+</html>`
+
+// The origin here is http://www.example.com
+const testHTMLRelativeLinks = `<!doctype html5>
+<html>
+<head>
+</head>
+<body>
+	<h1>This is my cool website</h1>
+	<div id="mostRead">
+		<h2>Most read posts today</h2>
+		<ul>
+			<li>
+				<img src="img1.png">A cool image</img>
+				<span class="itemHolder">
+					<span class="itemNumber">1.</span>
+					<span class="itemName">This is a hot take!</span>
+				</span>
+				<a href="/stories/hot-take">
+				Click here
+				</a>
+			</li>
+			<li>
+				<img src="img2.png">This is an image</img>
+				<span class="itemHolder">
+					<span class="itemNumber">2.</span>
+					<span class="itemName">Stuff happened today, yikes.</span>
+				</span>
+				<a href="/stories/stuff-happened">
+				Click here
+				</a>
+			</li>
+			<li>
+				<img src="img3.png">This is also an image</img>
+				<span class="itemHolder">
+					<span class="itemNumber">3.</span>
+					<span class="itemName">Is this supposition really true?</span>
+				</span>
+				<a href="/storiesreally-true">
 				Click here
 				</a>
 			</li>
@@ -59,16 +101,17 @@ const testHTML = `<!doctype html5>
 // mustParseURL is a test utility for returning a single value
 // from url.Parse where the input isn't user-defined and
 // we'd rather panic on the error than return it.
-func mustParseURL(raw string) *url.URL {
+func mustParseURL(raw string) url.URL {
 	u, err := url.Parse(raw)
 	if err != nil {
 		panic(err)
 	}
-	return u
+	return *u
 }
 
 func TestNewSet(t *testing.T) {
 	tests := []struct {
+		html    string
 		name    string
 		conf    Config
 		code    int
@@ -77,9 +120,10 @@ func TestNewSet(t *testing.T) {
 	}{
 		{
 			name: "canonical/intended case",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
@@ -89,15 +133,44 @@ func TestNewSet(t *testing.T) {
 				Name: "My Cool Publication",
 				Items: []LinkItem{
 					{
-						LinkURL: "www.example.com/stories/hot-take",
+						LinkURL: "http://www.example.com/stories/hot-take",
 						Caption: "This is a hot take!",
 					},
 					{
-						LinkURL: "www.example.com/stories/stuff-happened",
+						LinkURL: "http://www.example.com/stories/stuff-happened",
 						Caption: "Stuff happened today, yikes.",
 					},
 					{
-						LinkURL: "www.example.com/storiesreally-true",
+						LinkURL: "http://www.example.com/storiesreally-true",
+						Caption: "Is this supposition really true?",
+					},
+				},
+			},
+		},
+		{
+			name: "canonical/intended case with relative link URLs",
+			html: testHTMLRelativeLinks,
+			conf: Config{
+				Name:            "My Cool Publication",
+				URL:             mustParseURL("http://www.example.com"),
+				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
+				CaptionSelector: css.MustCompile("span.itemName"),
+				LinkSelector:    css.MustCompile("a"),
+			},
+			wantErr: false,
+			want: Set{
+				Name: "My Cool Publication",
+				Items: []LinkItem{
+					{
+						LinkURL: "http://www.example.com/stories/hot-take",
+						Caption: "This is a hot take!",
+					},
+					{
+						LinkURL: "http://www.example.com/stories/stuff-happened",
+						Caption: "Stuff happened today, yikes.",
+					},
+					{
+						LinkURL: "http://www.example.com/storiesreally-true",
 						Caption: "Is this supposition really true?",
 					},
 				},
@@ -105,9 +178,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "ambiguous link selector",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("*"),
@@ -117,9 +191,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "ambiguous caption selector",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span"),
 				LinkSelector:    css.MustCompile("a"),
@@ -129,15 +204,15 @@ func TestNewSet(t *testing.T) {
 				Name: "My Cool Publication",
 				Items: []LinkItem{
 					{
-						LinkURL: "www.example.com/stories/hot-take",
+						LinkURL: "http://www.example.com/stories/hot-take",
 						Caption: "[Missing caption due to ambiguous selector]",
 					},
 					{
-						LinkURL: "www.example.com/stories/stuff-happened",
+						LinkURL: "http://www.example.com/stories/stuff-happened",
 						Caption: "[Missing caption due to ambiguous selector]",
 					},
 					{
-						LinkURL: "www.example.com/storiesreally-true",
+						LinkURL: "http://www.example.com/storiesreally-true",
 						Caption: "[Missing caption due to ambiguous selector]",
 					},
 				},
@@ -145,9 +220,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "no link selector matches",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a:nth-of-type(2)"),
@@ -157,9 +233,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "the link selector matches a non-link",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("span.itemName"),
@@ -169,9 +246,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "the caption selector has no matches",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.noMatch"),
 				LinkSelector:    css.MustCompile("a"),
@@ -181,15 +259,15 @@ func TestNewSet(t *testing.T) {
 				Name: "My Cool Publication",
 				Items: []LinkItem{
 					{
-						LinkURL: "www.example.com/stories/hot-take",
+						LinkURL: "http://www.example.com/stories/hot-take",
 						Caption: "",
 					},
 					{
-						LinkURL: "www.example.com/stories/stuff-happened",
+						LinkURL: "http://www.example.com/stories/stuff-happened",
 						Caption: "",
 					},
 					{
-						LinkURL: "www.example.com/storiesreally-true",
+						LinkURL: "http://www.example.com/storiesreally-true",
 						Caption: "",
 					},
 				},
@@ -197,9 +275,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "400 status code",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
@@ -214,9 +293,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "500 status code",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
@@ -231,9 +311,10 @@ func TestNewSet(t *testing.T) {
 		},
 		{
 			name: "unexpected status code",
+			html: testHTML,
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
@@ -245,7 +326,7 @@ func TestNewSet(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := bytes.NewBuffer([]byte(testHTML))
+			r := bytes.NewBuffer([]byte(tt.html))
 			got, err := NewSet(r, tt.conf, tt.code)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewSet() error = %v, wantErr %v", err, tt.wantErr)
@@ -270,7 +351,7 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 			name: "returned links over max link count",
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
@@ -283,7 +364,7 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 			name: "returned links under max link count",
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
@@ -296,7 +377,7 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 			name: "no max link count",
 			conf: Config{
 				Name:            "My Cool Publication",
-				URL:             *(mustParseURL("http://www.example.com")),
+				URL:             mustParseURL("http://www.example.com"),
 				ItemSelector:    css.MustCompile("body div#mostRead ul li"),
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 
 	"golang.org/x/net/html"
 )
@@ -118,6 +119,14 @@ func NewSet(r io.Reader, conf Config, code int) (Set, error) {
 				h = a.Val
 			}
 		}
+
+		u, err := url.Parse(h)
+
+		if err != nil {
+			return Set{}, fmt.Errorf("cannot parse link URL %v", u)
+		}
+
+		h = conf.URL.Scheme + "://" + conf.URL.Host + u.Path
 
 		cs := conf.CaptionSelector.MatchAll(ls[i])
 		var caption string

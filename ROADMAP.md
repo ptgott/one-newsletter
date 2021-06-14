@@ -2,8 +2,6 @@
 
 1. Need to remove references to a `cleanupInterval` in test configs. Also consider removing `keyTTL` as a config option. This should really always be the email send interval.
 
-1. The links fetched via `linkSelector` are likely to be relative. Make sure the application fills in scraped links with a website's base URL if this is missing.
-
 1. Add a “-test” flag, which instructs the application to read the user config and open a sample email body in a local browser, skipping any database reads/writes. This way, a user can make sure their config is correct without having to wait for the application to generate a newsletter.
 
 1. Some sites, e.g., thekitchn.com, detect automation tools via the `User-Agent` header and refuse to show content if this is the case. Note that it’s often easy to bypass this restriction by using a `User-Agent` header copied from a legit Chrome request. But is that okay/legal?
