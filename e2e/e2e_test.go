@@ -85,7 +85,6 @@ func TestNewsletterEmailSending(t *testing.T) {
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
-			KeyTTL:            "168h", // no cleanup expected during the test
 		},
 	)
 	if err != nil {
@@ -188,7 +187,6 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
-			KeyTTL:            "168h", // no cleanup expected during the test
 		},
 	)
 	if err != nil {
@@ -319,7 +317,6 @@ func TestMaxLinkLimits(t *testing.T) {
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
-			KeyTTL:            "168h", // no cleanup expected during the test
 		},
 	)
 	if err != nil {
@@ -396,7 +393,6 @@ func totalBadgerDataFileSize(dirPath string) float64 {
 			if err != nil {
 				panic(err)
 			}
-			fmt.Printf("file to stat: %v with size: %v\n", entries[i].Name(), fi.Size())
 			size += fi.Size()
 		}
 	}
@@ -405,10 +401,9 @@ func totalBadgerDataFileSize(dirPath string) float64 {
 
 func TestDBcleanup(t *testing.T) {
 	pollIntervalS := 5
-	waitPaddingMS := 300 // to make sure we're done with scraping before we stat a directory
-	// This is short so we can guarantee cleanup
-	keyTTLms := 100
-	pollCycles := 6
+	pollCycles := 10
+	// just a bit more than the pollInterval
+	diskCheckIntervalMS := 5100
 
 	epubs := 10
 	linksPerPub := 10
@@ -445,7 +440,6 @@ func TestDBcleanup(t *testing.T) {
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
-			KeyTTL:            fmt.Sprintf("%vms", keyTTLms),
 		},
 	)
 	if err != nil {
@@ -467,9 +461,7 @@ func TestDBcleanup(t *testing.T) {
 
 	fileSizes := make([]float64, pollCycles, pollCycles)
 	for i := range fileSizes {
-		// Wait for one polling interval, then update all e-publications. This means that the next polling
-		// interval should trigger a wave of new database writes.
-		time.Sleep(time.Duration(pollIntervalS)*time.Second + time.Duration(waitPaddingMS)*time.Millisecond)
+		time.Sleep(time.Duration(diskCheckIntervalMS) * time.Millisecond)
 		fileSizes[i] = totalBadgerDataFileSize(testenv.tempDirPath)
 		testenv.update(linksPerPub)
 	}
@@ -488,19 +480,24 @@ func TestDBcleanup(t *testing.T) {
 		t.Fatalf("couldn't stop the application process: %v", err)
 	}
 
-	// The test assertion is based on the variance of the file sizes. We ignore
-	// the first value because it differs unreliably between test runs, e.g.,
-	// due to test setup. Garbage collection should stabilize the data directory
-	// file size over time.
-	v := stat.Variance(fileSizes[1:], nil)
-	var maxVariance float64 = 100 // bytes
+	// The test assertion is based on the standard deviation of the file sizes,
+	// since this is in the same unit as the file size (bytes).
+	// We ignore the first two values because they aren't expected to reflect
+	// the baseline state  of the application's disk usage.
+	// Garbage collection should stabilize the data directory file size over time.
+	stddev := stat.StdDev(fileSizes[2:], nil)
 
-	if v > maxVariance {
+	// We want the data directory to vary by, at most, 50 percent of the
+	// initial (post-setup) value in bytes. The initial value won't be that high,
+	// so 50 percent is a pretty good arbitrary limit over time.
+	var maxStdDev float64 = fileSizes[2] * .50
+
+	if stddev > maxStdDev {
 		t.Errorf(
-			"expected data directory size to vary by less than %v bytes, but got %v, with file sizes: %v",
-			maxVariance,
-			v,
-			fileSizes,
+			"expected data directory size to vary by less than %v bytes, but got %v, with post-setup file sizes: %v",
+			maxStdDev,
+			stddev,
+			fileSizes[2:],
 		)
 	}
 

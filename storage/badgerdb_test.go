@@ -15,13 +15,12 @@ import (
 // [1]: https://github.com/jaegertracing/jaeger/blob/740264bd4c7a7cca27f0eb47d80cd8f8fcbd5906/plugin/storage/badger/spanstore/cache_test.go#L109-L126
 func TestSimpleBadgerDBReadWrite(t *testing.T) {
 	dir := t.TempDir()
-	conf := KVConfig{
-		StorageDirPath: dir,
+	db, err := NewBadgerDB(
+		dir,
 		// Set these durations to a very long value since we don't expect
 		// keys to be cleaned up during the test
-		KeyTTLDuration: time.Duration(10) * time.Second,
-	}
-	db, err := NewBadgerDB(&conf)
+		time.Duration(10)*time.Second,
+	)
 
 	if err != nil {
 		t.Fatal(err)

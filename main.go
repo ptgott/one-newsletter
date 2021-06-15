@@ -68,12 +68,18 @@ func main() {
 	errCh := make(chan error) // errors to print
 
 	var httpClient poller.Client
-	scrapeCadence := time.NewTicker(config.PollSettings.Interval)
+	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
 	for {
 		select {
 		case <-scrapeCadence.C:
-			db, err := storage.NewBadgerDB(config.StorageSettings)
+			db, err := storage.NewBadgerDB(
+				config.Scraping.StorageDirPath,
+				// A key inserted at one polling interval expires two intervals
+				// later, meaning that the interval after a link is collected,
+				// we can still compare it to newly collected links.
+				2*config.Scraping.Interval,
+			)
 			if err != nil {
 				log.Error().
 					Err(err).

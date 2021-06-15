@@ -24,26 +24,23 @@ One Newsletter reads its configuration from the YAML file at the `-config` path.
 # AUTH. One Newsletter negotiates a TLS connection and uses your username
 # and pasword to log in. Mutual TLS is currently not supported.
 email:
-   smtpServerAddress: smtp://0.0.0.0:123
-   fromAddress: mynewsletter@example.com
-   toAddress: recipient@example.com
-   username: MyUser123
-   password: 123456-A_BCDE
+  smtpServerAddress: smtp://0.0.0.0:123
+  fromAddress: mynewsletter@example.com
+  toAddress: recipient@example.com
+  username: MyUser123
+  password: 123456-A_BCDE
 
-# This section configures the way One Newsletter scrapes websites for links.
+scraping:
+# The polling interval section configures the way One Newsletter scrapes
+# websites for links.
 # You must provide the interval at which One Newsletter checks for udpates and
 # sends the newsletter, using a format like 5000ms, 5s, 10m, or 24h. To help
 # prevent abuse, the minimum polling interval is 5s.
-polling:
     interval: 168h # every seven days
 
 # The storage section tells OneNewsletter how to store information abouts links
 # it has already collected. "storageDir" is a path to a directory in which 
-# One Newsletter will store its data via BadgerDB. "keyTTL" indicates how long
-# each link will be stored in the database before it is deleted.
-storage:
     storageDir: ./tempTestDir3012705204
-    keyTTL: "168h"
 
 # This section tells One Newsletter how to scrape websites for links. One
 # Newsletter tracks these as "link sources." The assumption is that each 
@@ -74,7 +71,6 @@ link_sources:
       itemSelector: "ul li"
       captionSelector: "p"
       linkSelector: "a"
-
 ```
 
 ## Testing

@@ -1,10 +1,10 @@
 # ROADMAP
 
-1. Need to remove references to a `cleanupInterval` in test configs. Also consider removing `keyTTL` as a config option. This should really always be the email send interval.
-
 1. Add a “-test” flag, which instructs the application to read the user config and open a sample email body in a local browser, skipping any database reads/writes. This way, a user can make sure their config is correct without having to wait for the application to generate a newsletter.
 
 1. Some sites, e.g., thekitchn.com, detect automation tools via the `User-Agent` header and refuse to show content if this is the case. Note that it’s often easy to bypass this restriction by using a `User-Agent` header copied from a legit Chrome request. But is that okay/legal?
+
+1. Reduce the number of logs created when writing entries to the database. Currently there are four logs for every new link item we save, plus another log for adding the link item to an email.
 
 1. Account for the possibility that some sites are dynamic. Maybe use a headless browser for all requests, rather than Go's HTTP client?
 

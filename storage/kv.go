@@ -1,55 +1,5 @@
 package storage
 
-import (
-	"errors"
-	"fmt"
-	"time"
-)
-
-// KVConfig contains settings specific to BadgerDB connections
-type KVConfig struct {
-	StorageDirPath string        `yaml:"storageDir"`
-	KeyTTLDuration time.Duration `yaml:"keyTTL"`
-}
-
-// UnmarshalYAML implements the yaml.Unmarshaler interface.
-// https://pkg.go.dev/gopkg.in/yaml.v2#Unmarshaler
-// It unmarshals a Config from YAML. We need to do this to grab some
-// time.Durations from user-provided strings.
-func (c *KVConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	v := make(map[string]string)
-	err := unmarshal(&v)
-
-	if err != nil {
-		return fmt.Errorf("can't parse the storage config: %v", err)
-	}
-
-	sp, ok := v["storageDir"]
-	if !ok {
-		return errors.New(
-			"user-provided storage config does not include a storage path",
-		)
-	}
-	c.StorageDirPath = sp
-
-	d, ok := v["keyTTL"]
-	if !ok {
-		return errors.New(
-			"user-provided storage config does not include a key TTL",
-		)
-	}
-	pd, err := time.ParseDuration(d)
-	if err != nil {
-		return fmt.Errorf(
-			"can't parse the user-provided key TTL interval as a duration: %v",
-			err,
-		)
-	}
-	c.KeyTTLDuration = pd
-
-	return nil
-}
-
 // KeyValue exposes a common interface for performing CRUD operations on an
 // underlying storage layer. Assumes some kind of persistent KV store
 // for linksrc.Sets.

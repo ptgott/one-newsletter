@@ -42,17 +42,14 @@ func (bl badgerLogger) Warningf(s string, o ...interface{}) {
 	bl.Logger.Info().Msg(fmt.Sprintf(s, o...))
 }
 
-// NewBadgerDB initializes the BadgerDB embedded database. It is up to the
-// caller to close the database with Close().
-func NewBadgerDB(conf *KVConfig) (*BadgerDB, error) {
+// NewBadgerDB initializes the BadgerDB embedded database given the provided
+// storage directory path sd and TTL for keys. It is up to the caller to close
+// the database with Close().
+func NewBadgerDB(sd string, ttl time.Duration) (*BadgerDB, error) {
 	// Open the Badger database at dirPath.
 	// See: https://dgraph.io/docs/badger/get-started/#opening-a-database
 	db, err := badger.Open(
-		badger.DefaultOptions(conf.StorageDirPath).
-			// The default is one million, and value log GC takes place at the
-			// level of the file--we need to keep this small so GC takes place
-			// regularly enough to ensure a constant file size.
-			WithValueLogMaxEntries(100).
+		badger.DefaultOptions(sd).
 			WithLogger(badgerLogger{log.Logger}).
 			// Among other things, compacting on close updates discard info so
 			// we can run value log GC later. Without this, the size of the data
@@ -67,7 +64,7 @@ func NewBadgerDB(conf *KVConfig) (*BadgerDB, error) {
 
 	return &BadgerDB{
 		connection: db,
-		keyTTL:     conf.KeyTTLDuration,
+		keyTTL:     ttl,
 	}, nil
 }
 
