@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"divnews/linksrc"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -23,9 +22,10 @@ func TestGenerateBody(t *testing.T) {
 
 	ed := EmailData{
 		mtx: &sync.Mutex{},
-		linkSets: []linksrc.Set{
+		content: []BodySectionContent{
 			{
-				Name: "Example Site 1",
+				PubName:  "Example Site 1",
+				Overview: "Here are the latest links:",
 				Items: []linksrc.LinkItem{
 					{
 						LinkURL: "www.example.com/stories/hot-take",
@@ -42,7 +42,8 @@ func TestGenerateBody(t *testing.T) {
 				},
 			},
 			{
-				Name: "Example Site 2",
+				PubName:  "Example Site 2",
+				Overview: "Here are the latest links:",
 				Items: []linksrc.LinkItem{
 					{
 						LinkURL: "www.example.com/stories/tragedy",
@@ -57,12 +58,9 @@ func TestGenerateBody(t *testing.T) {
 		},
 	}
 
-	h, err := ed.GenerateBody()
-	if err != nil {
-		t.Errorf("couldn't generate HTML from the EmailData: %v", err)
-	}
+	h := ed.GenerateBody()
 
-	_, err = os.Stat(relativeGoldenHTMLFilePath)
+	_, err := os.Stat(relativeGoldenHTMLFilePath)
 
 	// This will always be an *os.PathError
 	// https://golang.org/pkg/os/#Stat
@@ -98,134 +96,6 @@ func TestGenerateBody(t *testing.T) {
 
 }
 
-func TestGenerateEmptyBody(t *testing.T) {
-	s := []linksrc.Set{}
-	ed := EmailData{
-		linkSets: s,
-		mtx:      &sync.Mutex{},
-	}
-	_, err := ed.GenerateBody()
-
-	if err == nil {
-		t.Error(
-			"expected an error but not nil",
-		)
-	}
-}
-func TestGenerateEmptyText(t *testing.T) {
-	s := []linksrc.Set{}
-	ed := EmailData{
-		linkSets: s,
-		mtx:      &sync.Mutex{},
-	}
-	_, err := ed.GenerateText()
-
-	if err == nil {
-		t.Error(
-			"expected an error but not nil",
-		)
-	}
-}
-
-func TestGenerateBodyWithEmptyLinkSet(t *testing.T) {
-	s := []linksrc.Set{
-		{
-			Name:  "My ePublication",
-			Items: []linksrc.LinkItem{},
-		},
-	}
-
-	ed := EmailData{
-		linkSets: s,
-		mtx:      &sync.Mutex{},
-	}
-
-	bod, err := ed.GenerateBody()
-
-	if err != nil {
-		t.Errorf("unexpected error generating an email body: %v", err)
-	}
-
-	if !strings.Contains(bod, "could not find any links") {
-		t.Error("the email did not tell the user that we couldn't find links")
-	}
-
-}
-func TestGenerateTextWithEmptyLinkSet(t *testing.T) {
-	s := []linksrc.Set{
-		{
-			Name:  "My ePublication",
-			Items: []linksrc.LinkItem{},
-		},
-	}
-
-	ed := EmailData{
-		linkSets: s,
-		mtx:      &sync.Mutex{},
-	}
-
-	bod, err := ed.GenerateText()
-
-	if err != nil {
-		t.Errorf("unexpected error generating an email body: %v", err)
-	}
-
-	if !strings.Contains(bod, "could not find any links") {
-		t.Error("the email did not tell the user that we couldn't find links")
-	}
-
-}
-
-func TestGenerateBodyWithNon200Status(t *testing.T) {
-	s := []linksrc.Set{
-		{
-			Name:   "My ePublication",
-			Items:  []linksrc.LinkItem{},
-			Status: linksrc.StatusMiscClientError,
-		},
-	}
-
-	ed := EmailData{
-		linkSets: s,
-		mtx:      &sync.Mutex{},
-	}
-
-	bod, err := ed.GenerateBody()
-
-	if err != nil {
-		t.Errorf("unexpected error generating an email body: %v", err)
-	}
-
-	if !strings.Contains(bod, "error") {
-		t.Error("the email did not mention an error as expected")
-	}
-}
-
-func TestGenerateTextWithNon200Status(t *testing.T) {
-	s := []linksrc.Set{
-		{
-			Name:   "My ePublication",
-			Items:  []linksrc.LinkItem{},
-			Status: linksrc.StatusMiscClientError,
-		},
-	}
-
-	ed := EmailData{
-		linkSets: s,
-		mtx:      &sync.Mutex{},
-	}
-
-	bod, err := ed.GenerateText()
-
-	if err != nil {
-		t.Errorf("unexpected error generating an email body: %v", err)
-	}
-
-	if !strings.Contains(bod, "error") {
-		t.Error("the email text did not mention an error as expected")
-	}
-}
-
 // GenerateText straightforwardly populates a template and takes no input. As
 // a result, there's not much that can go wrong. Still, we want to catch
 // regressions, so we'll use a golden file here. To update the golden file,
@@ -234,9 +104,10 @@ func TestGenerateTextWithNon200Status(t *testing.T) {
 func TestGenerateText(t *testing.T) {
 	ed := EmailData{
 		mtx: &sync.Mutex{},
-		linkSets: []linksrc.Set{
+		content: []BodySectionContent{
 			{
-				Name: "Example Site 1",
+				PubName:  "Example Site 1",
+				Overview: "Here are the latest links:",
 				Items: []linksrc.LinkItem{
 					{
 						LinkURL: "www.example.com/stories/hot-take",
@@ -253,7 +124,8 @@ func TestGenerateText(t *testing.T) {
 				},
 			},
 			{
-				Name: "Example Site 2",
+				PubName:  "Example Site 2",
+				Overview: "Here are the latest links:",
 				Items: []linksrc.LinkItem{
 					{
 						LinkURL: "www.example.com/stories/tragedy",
@@ -268,12 +140,9 @@ func TestGenerateText(t *testing.T) {
 		},
 	}
 
-	h, err := ed.GenerateText()
-	if err != nil {
-		t.Errorf("couldn't generate text from the EmailData: %v", err)
-	}
+	h := ed.GenerateText()
 
-	_, err = os.Stat(relativeGoldenTextFilePath)
+	_, err := os.Stat(relativeGoldenTextFilePath)
 
 	// This will always be an *os.PathError
 	// https://golang.org/pkg/os/#Stat
@@ -312,17 +181,16 @@ func TestGenerateText(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 	ed := NewEmailData()
-	ed.Add(linksrc.Set{
-		Name: "My Magazine",
-		Items: []linksrc.LinkItem{
-			{
-				LinkURL: "http://www.example.com",
-				Caption: "Something happened!",
-			},
-		},
-	})
+	i := linksrc.LinkItem{
+		LinkURL: "http://www.example.com",
+		Caption: "Something happened!",
+	}
 
-	if len(ed.linkSets) != 1 {
+	s := linksrc.Set{}
+	s.AddLinkItem(i)
+	ed.Add(s)
+
+	if len(ed.content) != 1 {
 		t.Error("could not add to the EmailData")
 	}
 }

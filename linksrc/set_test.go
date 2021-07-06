@@ -128,19 +128,18 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
 			},
-			wantErr: false,
 			want: Set{
 				Name: "My Cool Publication",
-				Items: []LinkItem{
-					{
+				items: map[string]LinkItem{
+					"http://www.example.com/stories/hot-take": {
 						LinkURL: "http://www.example.com/stories/hot-take",
 						Caption: "This is a hot take!",
 					},
-					{
+					"http://www.example.com/stories/stuff-happened": {
 						LinkURL: "http://www.example.com/stories/stuff-happened",
 						Caption: "Stuff happened today, yikes.",
 					},
-					{
+					"http://www.example.com/storiesreally-true": {
 						LinkURL: "http://www.example.com/storiesreally-true",
 						Caption: "Is this supposition really true?",
 					},
@@ -157,19 +156,18 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
 			},
-			wantErr: false,
 			want: Set{
 				Name: "My Cool Publication",
-				Items: []LinkItem{
-					{
+				items: map[string]LinkItem{
+					"http://www.example.com/stories/hot-take": {
 						LinkURL: "http://www.example.com/stories/hot-take",
 						Caption: "This is a hot take!",
 					},
-					{
+					"http://www.example.com/stories/stuff-happened": {
 						LinkURL: "http://www.example.com/stories/stuff-happened",
 						Caption: "Stuff happened today, yikes.",
 					},
-					{
+					"http://www.example.com/storiesreally-true": {
 						LinkURL: "http://www.example.com/storiesreally-true",
 						Caption: "Is this supposition really true?",
 					},
@@ -186,8 +184,13 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("*"),
 			},
-			wantErr: true,
-			want:    Set{},
+			want: Set{
+				Name:  "My Cool Publication",
+				items: map[string]LinkItem{},
+				messages: []string{
+					"The link selector is ambiguous, so we couldn't parse any link items.",
+				},
+			},
 		},
 		{
 			name: "ambiguous caption selector",
@@ -199,19 +202,18 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span"),
 				LinkSelector:    css.MustCompile("a"),
 			},
-			wantErr: false,
 			want: Set{
 				Name: "My Cool Publication",
-				Items: []LinkItem{
-					{
+				items: map[string]LinkItem{
+					"http://www.example.com/stories/hot-take": {
 						LinkURL: "http://www.example.com/stories/hot-take",
 						Caption: "[Missing caption due to ambiguous selector]",
 					},
-					{
+					"http://www.example.com/stories/stuff-happened": {
 						LinkURL: "http://www.example.com/stories/stuff-happened",
 						Caption: "[Missing caption due to ambiguous selector]",
 					},
-					{
+					"http://www.example.com/storiesreally-true": {
 						LinkURL: "http://www.example.com/storiesreally-true",
 						Caption: "[Missing caption due to ambiguous selector]",
 					},
@@ -228,8 +230,13 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a:nth-of-type(2)"),
 			},
-			wantErr: true,
-			want:    Set{},
+			want: Set{
+				Name:  "My Cool Publication",
+				items: map[string]LinkItem{},
+				messages: []string{
+					"There are no links in the list item. Double-check your configuration.",
+				},
+			},
 		},
 		{
 			name: "the link selector matches a non-link",
@@ -241,8 +248,13 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("span.itemName"),
 			},
-			wantErr: true,
-			want:    Set{},
+			want: Set{
+				Name:  "My Cool Publication",
+				items: map[string]LinkItem{},
+				messages: []string{
+					"The link selector does not match a link but rather span.",
+				},
+			},
 		},
 		{
 			name: "the caption selector has no matches",
@@ -254,19 +266,18 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.noMatch"),
 				LinkSelector:    css.MustCompile("a"),
 			},
-			wantErr: false,
 			want: Set{
 				Name: "My Cool Publication",
-				Items: []LinkItem{
-					{
+				items: map[string]LinkItem{
+					"http://www.example.com/stories/hot-take": {
 						LinkURL: "http://www.example.com/stories/hot-take",
 						Caption: "",
 					},
-					{
+					"http://www.example.com/stories/stuff-happened": {
 						LinkURL: "http://www.example.com/stories/stuff-happened",
 						Caption: "",
 					},
-					{
+					"http://www.example.com/storiesreally-true": {
 						LinkURL: "http://www.example.com/storiesreally-true",
 						Caption: "",
 					},
@@ -283,12 +294,13 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
 			},
-			code:    400,
-			wantErr: false,
+			code: 400,
 			want: Set{
-				Name:   "My Cool Publication",
-				Items:  []LinkItem{},
-				Status: StatusMiscClientError,
+				Name:  "My Cool Publication",
+				items: map[string]LinkItem{},
+				messages: []string{
+					"Got a 400 error sending the scrape request—check your config.",
+				},
 			},
 		},
 		{
@@ -301,12 +313,13 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
 			},
-			code:    500,
-			wantErr: false,
+			code: 500,
 			want: Set{
-				Name:   "My Cool Publication",
-				Items:  []LinkItem{},
-				Status: StatusServerError,
+				Name:  "My Cool Publication",
+				items: map[string]LinkItem{},
+				messages: []string{
+					"Got a 500 error sending the scrape request—check manually to see if this is temporary.",
+				},
 			},
 		},
 		{
@@ -319,19 +332,20 @@ func TestNewSet(t *testing.T) {
 				CaptionSelector: css.MustCompile("span.itemName"),
 				LinkSelector:    css.MustCompile("a"),
 			},
-			code:    700,
-			wantErr: true,
-			want:    Set{},
+			code: 700,
+			want: Set{
+				Name:  "My Cool Publication",
+				items: map[string]LinkItem{},
+				messages: []string{
+					"Unexpected status code 700. Try visiting the site manually.",
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := bytes.NewBuffer([]byte(tt.html))
-			got, err := NewSet(r, tt.conf, tt.code)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewSet() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
+			got := NewSet(r, tt.conf, tt.code)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewSet() = %v, want %v", got, tt.want)
 			}
@@ -345,7 +359,6 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 		conf          Config
 		code          int
 		wantSetLength int
-		wantErr       bool
 	}{
 		{
 			name: "returned links over max link count",
@@ -358,7 +371,6 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 				MaxItems:        2,
 			},
 			wantSetLength: 2,
-			wantErr:       false,
 		},
 		{
 			name: "returned links under max link count",
@@ -371,7 +383,6 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 				MaxItems:        5,
 			},
 			wantSetLength: 3,
-			wantErr:       false,
 		},
 		{
 			name: "no max link count",
@@ -384,19 +395,76 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 				MaxItems:        0,
 			},
 			wantSetLength: 3,
-			wantErr:       false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := bytes.NewBuffer([]byte(testHTML))
-			got, err := NewSet(r, tt.conf, tt.code)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewSet() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if len(got.Items) != tt.wantSetLength {
+			got := NewSet(r, tt.conf, tt.code)
+			if len(got.items) != tt.wantSetLength {
 				t.Errorf("wanted a Set with %v links but got %v", tt.wantSetLength, got)
+			}
+		})
+	}
+}
+
+func TestRemoveItem(t *testing.T) {
+	testCases := []struct {
+		desc     string
+		s        *Set
+		toRemove LinkItem
+		expected map[string]LinkItem
+	}{
+		{
+			desc: "removing middle item",
+			s: &Set{
+				Name: "my set",
+				items: map[string]LinkItem{
+					"https://www.example.com/my-post1": {
+						LinkURL: "https://www.example.com/my-post1",
+						Caption: "This is another post",
+					},
+					"https://www.example.com/my-post2": {
+						LinkURL: "https://www.example.com/my-post2",
+						Caption: "This is a second post",
+					},
+					"https://www.example.com/my-post3": {
+						LinkURL: "https://www.example.com/my-post3",
+						Caption: "This is the final post",
+					},
+				},
+			},
+			toRemove: LinkItem{
+				LinkURL: "https://www.example.com/my-post2",
+				Caption: "This is a second post",
+			},
+			expected: map[string]LinkItem{
+				"https://www.example.com/my-post1": {
+					LinkURL: "https://www.example.com/my-post1",
+					Caption: "This is another post",
+				},
+				"https://www.example.com/my-post3": {
+					LinkURL: "https://www.example.com/my-post3",
+					Caption: "This is the final post",
+				},
+			},
+		},
+		{
+			desc: "no items",
+			s: &Set{
+				Name:  "my set",
+				items: map[string]LinkItem{},
+			},
+			toRemove: LinkItem{},
+			expected: map[string]LinkItem{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			tc.s.RemoveLinkItem(tc.toRemove)
+			if !reflect.DeepEqual(tc.s.items, tc.expected) {
+				t.Errorf("wanted %v but got %v", tc.expected, tc.s.items)
 			}
 		})
 	}

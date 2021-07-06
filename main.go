@@ -3,10 +3,10 @@ package main
 import (
 	"divnews/html"
 	"divnews/linksrc"
-	"divnews/poller"
 	"divnews/storage"
 	"divnews/userconfig"
 	"flag"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -65,14 +65,22 @@ func main() {
 
 	log.Info().Str("configPath", *configPath).Msg("successfully validated the config")
 
+	// Declare channels between the main goroutine and the scrapers
 	errCh := make(chan error) // errors to print
-
-	var httpClient poller.Client
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
-	for {
-		select {
-		case <-scrapeCadence.C:
+	httpClient := http.Client{
+		// Determined arbitrarily. We don't want to wait forever for a request
+		// to complete, but the cadence of the newsletter means that a minute
+		// of extra waiting is probably okay.
+		Timeout: time.Duration(60) * time.Second,
+	}
+
+	// Start the main scraping/email sending loop
+	go func(tc <-chan time.Time, ec chan error) {
+		for {
+			// Block until the next scraping interval
+			<-tc
 			db, err := storage.NewBadgerDB(
 				config.Scraping.StorageDirPath,
 				// A key inserted at one polling interval expires two intervals
@@ -102,60 +110,57 @@ func main() {
 					lc linksrc.Config,
 					g *sync.WaitGroup,
 					bc chan linksrc.Set,
-					ec chan error,
+					ech chan error,
 				) {
 					defer g.Done()
 					// Try the scrape request only once. If we get a non-2xx
 					// response, it's probably not something we can expect to
 					// clear up after retrying.
-					r, err := httpClient.Client.Get(lc.URL.String())
+					r, err := httpClient.Get(lc.URL.String())
 					if err != nil {
-						ec <- err
+						ech <- err
 						return
 					}
 					defer r.Body.Close()
-					s, err := linksrc.NewSet(r.Body, lc, r.StatusCode)
-					if err != nil {
-						ec <- err
-						return
-					}
+					s := linksrc.NewSet(r.Body, lc, r.StatusCode)
 
 					bc <- s
 
-				}(ls, &wg, emailBuildCh, errCh)
+				}(ls, &wg, emailBuildCh, ec)
 			}
 			wg.Wait()
+			// TODO: Having the receiver close the channel is not how close()
+			// was intended to be used, but senders have no way of knowing
+			// when to close the channel, and we need to use close() in order
+			// to range over the channel below.
 			close(emailBuildCh)
 			log.Info().
 				Msg("done with one round of scraping")
 			for set := range emailBuildCh {
-				newSet := linksrc.Set{
-					Name:   set.Name,
-					Items:  []linksrc.LinkItem{},
-					Status: set.Status,
-				}
 				// See if any items are missing in the db. If so, store them
 				// and add them to a new email body.
-				for _, item := range set.Items {
+				for _, item := range set.LinkItems() {
 					// Read returns a "key not found" error if a key is not found.
 					// https://pkg.go.dev/github.com/dgraph-io/badger#Txn.Get
 					_, err := db.Read(item.Key())
-					if err != nil {
-						newSet.Items = append(newSet.Items, item)
-					}
-					log.Info().Msg("storing a link item in the database")
-					err = db.Put(item.NewKVEntry())
-					if err != nil {
-						log.Error().
-							Err(err).
-							Msg("error saving a link item")
-						continue
+					// If the Item already exists in the database,
+					if err == nil {
+						set.RemoveLinkItem(item)
+					} else {
+						log.Info().Msg("storing a link item in the database")
+						err = db.Put(item.NewKVEntry())
+						if err != nil {
+							log.Error().
+								Err(err).
+								Msg("error saving a link item")
+							continue
+						}
 					}
 				}
-				d.Add(newSet)
+				d.Add(set)
 				log.Info().
-					Int("itemCount", len(newSet.Items)).
-					Str("setName", newSet.Name).
+					Int("itemCount", set.CountLinkItems()).
+					Str("setName", set.Name).
 					Msg("added items to the email")
 			}
 
@@ -173,16 +178,8 @@ func main() {
 			// https://pkg.go.dev/github.com/dgraph-io/badger#readme-i-don-t-see-any-disk-writes-why
 			db.Close()
 			log.Info().Msg("closed the database to flush data to disk")
-			bod, err := d.GenerateBody()
-			if err != nil {
-				log.Error().Err(err).Msg("error generating an email body")
-				continue
-			}
-			txt, err := d.GenerateText()
-			if err != nil {
-				log.Error().Err(err).Msg("error generating an email plaintext")
-				continue
-			}
+			bod := d.GenerateBody()
+			txt := d.GenerateText()
 			log.Info().
 				Msg("attempting to send an email")
 			err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
@@ -190,8 +187,12 @@ func main() {
 				log.Error().Err(err).Msg("error sending an email")
 				continue
 			}
-		case err := <-errCh:
-			log.Error().Err(err).Msg("error gathering links to email")
 		}
+	}(scrapeCadence.C, errCh)
+
+	// At this point, the main goroutine blocks until there's an error
+	for {
+		err := <-errCh
+		log.Error().Err(err).Msg("error gathering links to email")
 	}
 }

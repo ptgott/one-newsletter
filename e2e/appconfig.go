@@ -28,6 +28,9 @@ type mockLinksrcInfo struct {
 	URL      string
 	Name     string
 	MaxItems int
+	// The linkSelector, captionSelector, and itemSelector in a link source
+	// config. Leave blank if you would like to use valid defaults.
+	SelectorsOverride string
 }
 
 // createAppConfig writes a configuration YAML doc to the given path.
@@ -45,9 +48,13 @@ link_sources:
 {{ range .LinkSources }}
     - name: {{ .Name }}
       url: {{ .URL }}
+	  {{- if ne .SelectorsOverride "" }}	  
+{{ .SelectorsOverride }}
+{{ else }}
       itemSelector: "ul li"
       captionSelector: "p"
       linkSelector: "a"
+{{ end }}
       maxItems: {{ .MaxItems }}
 {{ end }}
 scraping:

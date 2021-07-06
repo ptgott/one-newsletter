@@ -502,3 +502,93 @@ func TestDBcleanup(t *testing.T) {
 	}
 
 }
+
+// Make sure that an email is still sent if the only scrape config contains
+// invalid CSS. This test exists because one site with a config that included
+// an ambiguous selector seems to have caused the application to deadlock.
+func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
+	stopIntervalS := 8
+	pollIntervalS := 5
+	epubs := 1
+	linksPerPub := 10
+	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
+		numHTTPServers: epubs,
+		numLinks:       linksPerPub,
+	})
+
+	defer testenv.tearDown()
+
+	if err != nil {
+		t.Fatalf("error starting test environment: %v", err)
+	}
+
+	// Configure link site checks for each fake e-publicaiton we've spun up.
+	urls := testenv.urls()
+	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	for i := range urls {
+		// not expecting errors since these URLs are guaranteed to be
+		// for running servers, and don't come from user input
+		pu, _ := url.Parse(urls[i])
+
+		u[i] = mockLinksrcInfo{
+			URL:      urls[i],
+			Name:     fmt.Sprintf("site-%v", pu.Port()),
+			MaxItems: 5,
+			// "ul" is ambiguous, since each link items has the selector
+			// "ul li"
+			SelectorsOverride: `      itemSelector: ul
+      captionSelector: p
+      linkSelector: a`,
+		}
+	}
+
+	err = createAppConfig(
+		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+		appConfigOptions{
+			SMTPServerAddress: testenv.SMTPServer.Address(),
+			LinkSources:       u,
+			StorageDir:        testenv.tempDirPath,
+			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+		},
+	)
+	if err != nil {
+		panic(fmt.Sprintf("can't create the app config: %v", err))
+	}
+
+	// Run the application from the entrypoint with our new config
+	cmd := exec.Command(
+		appPath,
+		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
+	)
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	if err = cmd.Start(); err != nil {
+		t.Fatalf("couldn't start the app: %v", err)
+	}
+
+	// Wait for the application to poll the link site and check for emails
+	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	err = cmd.Process.Signal(os.Interrupt)
+	// At this point you need to find the process and kill it manually.
+	// This messes up the test, so we panic.
+	if err != nil {
+		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
+	}
+
+	// it's okay for the application to exit with an error--we want to proceed
+	// with the test suite so we can get visibility into those errors
+	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
+		t.Fatalf("couldn't stop the application process: %v", err)
+	}
+
+	em, err := testenv.SMTPServer.RetrieveEmails(0)
+	if err != nil {
+		t.Errorf("could not retrieve emails: %v", err)
+	}
+	if len(em) != 1 {
+		t.Fatalf("expected to receive one email, but got %v", len(em))
+	}
+
+}
