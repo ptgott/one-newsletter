@@ -36,7 +36,17 @@ func main() {
 	configPath := flag.String(
 		"config",
 		"./config.yaml",
-		"Path to a JSON or YAML file containing your configuration",
+		"path to a JSON or YAML file containing your configuration",
+	)
+	noEmail := flag.Bool(
+		"noemail",
+		false,
+		"print email body HTML to stdout instead of sending it",
+	)
+	oneOff := flag.Bool(
+		"oneoff",
+		false,
+		"run the scrapers once and (unless -noemail is present) send one email",
 	)
 	flag.Parse()
 
@@ -79,20 +89,31 @@ func main() {
 	// Start the main scraping/email sending loop
 	go func(tc <-chan time.Time, ec chan error) {
 		for {
-			// Block until the next scraping interval
-			<-tc
-			db, err := storage.NewBadgerDB(
-				config.Scraping.StorageDirPath,
-				// A key inserted at one polling interval expires two intervals
-				// later, meaning that the interval after a link is collected,
-				// we can still compare it to newly collected links.
-				2*config.Scraping.Interval,
-			)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Msg("problem connecting to the database")
-				continue // Maybe this was a transient error? Log it and move on.
+			// Block until the next scraping interval unless this is a one-time
+			// deal
+			if !*oneOff {
+				<-tc
+			}
+
+			// Create a new db instance per scrape so we can close the db
+			// after the scrapers are finished and ensure disk writes.
+			var db storage.KeyValue
+			if *oneOff == false {
+				db, err = storage.NewBadgerDB(
+					config.Scraping.StorageDirPath,
+					// A key inserted at one polling interval expires two intervals
+					// later, meaning that the interval after a link is collected,
+					// we can still compare it to newly collected links.
+					2*config.Scraping.Interval,
+				)
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msg("problem connecting to the database")
+					continue // Maybe this was a transient error? Log it and move on.
+				}
+			} else {
+				db = &storage.NoOpDB{}
 			}
 			log.Info().Msg("set up the database connection successfully")
 			log.Info().
@@ -180,19 +201,34 @@ func main() {
 			log.Info().Msg("closed the database to flush data to disk")
 			bod := d.GenerateBody()
 			txt := d.GenerateText()
-			log.Info().
-				Msg("attempting to send an email")
-			err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
-			if err != nil {
-				log.Error().Err(err).Msg("error sending an email")
-				continue
+			log.Info().Msg("attempting to send an email")
+
+			if *noEmail {
+				os.Stdout.Write([]byte(bod))
+			} else {
+				err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
+				if err != nil {
+					log.Error().Err(err).Msg("error sending an email")
+				}
+			}
+
+			// We're only doing this once, so get out of the main loop
+			if *oneOff {
+				close(errCh)
+				return
 			}
 		}
 	}(scrapeCadence.C, errCh)
 
 	// At this point, the main goroutine blocks until there's an error
 	for {
-		err := <-errCh
-		log.Error().Err(err).Msg("error gathering links to email")
+		err, ok := <-errCh
+		// There's no need for the error channel anymore, so we stop
+		// looping and let the rest of the program complete.
+		if !ok {
+			break
+		} else {
+			log.Error().Err(err).Msg("error gathering links to email")
+		}
 	}
 }

@@ -14,9 +14,11 @@ type KeyValue interface {
 	// Cleanup performs routine deletion of old records. We assign
 	// TTLs to KV pairs and delete them periodically.
 	Cleanup() error
-	// Drain/tear down the connection, or something analogous for
-	// an embedded database
-	Close() error
+	// Drain/tear down the connection, or something analogous for an embedded
+	// database. Intended to be used with defer. Implementations should handle
+	// retries or drain connections internally and panic on failure, since there
+	// is nothing the program can do if it can't close the database.
+	Close()
 }
 
 // KVEntry is what we'll write to and read from the KV store
