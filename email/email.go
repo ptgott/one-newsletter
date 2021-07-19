@@ -138,23 +138,25 @@ func (uc UserConfig) SendNewsletter(asText, asHTML []byte) error {
 	headerWriter.PrintfLine("From: Your Link Newsletter<%s>", uc.FromAddress)
 	headerWriter.PrintfLine("To: <%s>", uc.ToAddress)
 	headerWriter.PrintfLine("Subject: New links to look at")
-	headerWriter.PrintfLine("") // blank line before message body
 
 	// Create the multipart/alternative RFC 2046 entity
 	var ab bytes.Buffer
 	altWriter := multipart.NewWriter(&ab)
-	maw, _ := altWriter.CreatePart(
-		map[string][]string{"Content-Type": {"multipart/alternative"}},
-	)
 
-	plainWriter := multipart.NewWriter(maw)
-	pw, _ := plainWriter.CreatePart(
+	// Write the multipart/alternative boundary to a Content-Type header before
+	// we write the message body
+	headerWriter.PrintfLine(
+		"Content-Type: multipart/alternative; boundary=%v",
+		altWriter.Boundary(),
+	)
+	headerWriter.PrintfLine("") // blank line before message body
+
+	pw, _ := altWriter.CreatePart(
 		map[string][]string{"Content-Type": {"text/plain"}},
 	)
 	pw.Write(asText)
 
-	htmlWriter := multipart.NewWriter(maw)
-	hw, _ := htmlWriter.CreatePart(
+	hw, _ := altWriter.CreatePart(
 		map[string][]string{"Content-Type": {"text/html"}},
 	)
 	hw.Write(asHTML)

@@ -3,7 +3,6 @@ package smtptest
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -177,6 +176,5 @@ func (es *InMemoryEmailStore) RetrieveEmails(t int64) ([]string, error) {
 
 // Address returns the host:port of the test SMTP server.
 func (is *InProcessServer) Address() string {
-	fmt.Printf("Server address: %v\n", is.Server.Domain+is.Server.Addr)
 	return is.Server.Domain + is.Server.Addr
 }

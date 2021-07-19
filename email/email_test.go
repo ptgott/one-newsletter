@@ -3,7 +3,11 @@ package email
 import (
 	"bytes"
 	"divnews/smtptest"
+	"errors"
+	"io"
+	"mime/multipart"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -176,13 +180,62 @@ func TestSend(t *testing.T) {
 		t.Error(err)
 	}
 	if len(b) != 1 {
-		t.Errorf("expected to have sent one email, but sent %v instead", len(b))
+		t.Fatalf("expected to have sent one email, but sent %v instead", len(b))
 	}
 	if !strings.Contains(b[0], string(bodText)) {
 		t.Error("the text/plain email body never reached the server")
 	}
 	if !strings.Contains(b[0], string(bodHTML)) {
 		t.Error("the text/html email body never reached the server")
+	}
+
+	bre := regexp.MustCompile(
+		"Content-Type: multipart/alternative; boundary=(\\w+)",
+	)
+	m := bre.FindAllStringSubmatch(b[0], -1)
+	if len(m) == 0 {
+		t.Error("could not find the expected header with a boundary attribute")
+	}
+
+	bnd := m[0][1] // first capture group match, i.e., the boundary
+
+	s := strings.SplitAfterN(b[0], "\r\n\r\n", 2)
+	if len(s) < 2 {
+		t.Errorf("expecting a blank line after the headers, but got none")
+	}
+
+	rdr := multipart.NewReader(
+		bytes.NewBuffer([]byte(s[1])), // the email body, supposedly
+		bnd,
+	)
+
+	expectedParts := map[string]struct{}{
+		"text/plain": {},
+		"text/html":  {},
+	}
+	var partMatches int
+	for {
+		p, err := rdr.NextPart()
+		if errors.As(err, &io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := expectedParts[p.Header.Get("Content-Type")]; !ok {
+			t.Fatalf(
+				"unexpected MIME type in header: %v",
+				p.Header.Get("Content-Type"),
+			)
+		}
+		partMatches++
+	}
+	if partMatches != len(expectedParts) {
+		t.Errorf(
+			"expected %v MIME parts but got %v",
+			len(expectedParts),
+			partMatches,
+		)
 	}
 
 }
