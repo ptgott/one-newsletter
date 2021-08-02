@@ -1,10 +1,11 @@
 package html
 
 import (
-	"divnews/linksrc"
 	"html/template"
 	"strings"
 	"sync"
+
+	"github.com/ptgott/one-newsletter/linksrc"
 )
 
 // BodySectionContent is used to populate email body templates

@@ -1,4 +1,4 @@
-module divnews
+module github.com/ptgott/one-newsletter
 
 go 1.15
 

@@ -76,6 +76,11 @@ link_sources:
     itemSelector: "ul li"
     captionSelector: "p"
     linkSelector: "a"
+    # Maximum number of link items to include in an email for a publication.
+    # The default is 5. If this is 0, One Newsletter will disregard it.
+    # If more link items are found, One Newsletter won't extract links from
+    # them.
+    maxItems: 10
 ```
 
 ### Optional flags

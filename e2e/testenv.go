@@ -1,11 +1,12 @@
 package e2e
 
 import (
-	"divnews/smtptest"
 	"errors"
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/ptgott/one-newsletter/smtptest"
 )
 
 const (

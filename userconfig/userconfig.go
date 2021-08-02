@@ -1,12 +1,14 @@
 package userconfig
 
 import (
-	"divnews/email"
-	"divnews/linksrc"
 	"errors"
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/ptgott/one-newsletter/linksrc"
+
+	"github.com/ptgott/one-newsletter/email"
 
 	yaml "gopkg.in/yaml.v2"
 )

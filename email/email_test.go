@@ -2,7 +2,6 @@ package email
 
 import (
 	"bytes"
-	"divnews/smtptest"
 	"errors"
 	"io"
 	"mime/multipart"
@@ -10,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/ptgott/one-newsletter/smtptest"
 
 	"gopkg.in/yaml.v2"
 )

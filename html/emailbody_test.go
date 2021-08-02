@@ -2,10 +2,11 @@ package html
 
 import (
 	"bytes"
-	"divnews/linksrc"
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/ptgott/one-newsletter/linksrc"
 )
 
 const (

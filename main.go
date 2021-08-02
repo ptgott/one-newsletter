@@ -1,16 +1,17 @@
 package main
 
 import (
-	"divnews/html"
-	"divnews/linksrc"
-	"divnews/storage"
-	"divnews/userconfig"
 	"flag"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"time"
+
+	"github.com/ptgott/one-newsletter/html"
+	"github.com/ptgott/one-newsletter/linksrc"
+	"github.com/ptgott/one-newsletter/storage"
+	"github.com/ptgott/one-newsletter/userconfig"
 
 	"github.com/rs/zerolog/log"
 )

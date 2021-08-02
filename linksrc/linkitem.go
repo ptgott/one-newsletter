@@ -3,9 +3,10 @@ package linksrc
 import (
 	"bytes"
 	"crypto/sha256"
-	"divnews/storage"
 	"encoding/binary"
 	"time"
+
+	"github.com/ptgott/one-newsletter/storage"
 )
 
 // LinkItem represents data for a single link item found within a

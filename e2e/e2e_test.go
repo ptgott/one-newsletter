@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"bytes"
-	"divnews/smtptest"
 	"fmt"
 	"io"
 	"math/rand"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ptgott/one-newsletter/smtptest"
 
 	"github.com/rs/zerolog/log"
 	"gonum.org/v1/gonum/stat"
