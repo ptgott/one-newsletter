@@ -94,6 +94,65 @@ link_sources:
 			shouldBeEmpty: true,
 			conf:          `this is not yaml`,
 		},
+		{
+			description:   "no item selector or caption selector",
+			shouldBeError: false,
+			shouldBeEmpty: false,
+			conf: `---
+email:
+    smtpServerAddress: smtp://0.0.0.0:123
+    fromAddress: mynewsletter@example.com
+    toAddress: recipient@example.com
+    username: MyUser123
+    password: 123456-A_BCDE
+link_sources:
+    - name: site-38911
+      url: http://127.0.0.1:38911
+      linkSelector: "a"
+scraping:
+    interval: 5s
+    storageDir: ./tempTestDir3012705204`,
+		},
+		{
+			description:   "no link selector",
+			shouldBeError: true,
+			shouldBeEmpty: true,
+			conf: `---
+email:
+    smtpServerAddress: smtp://0.0.0.0:123
+    fromAddress: mynewsletter@example.com
+    toAddress: recipient@example.com
+    username: MyUser123
+    password: 123456-A_BCDE
+link_sources:
+    - name: site-38911
+      url: http://127.0.0.1:38911
+      itemSelector: "ul li"
+      captionSelector: "p"
+scraping:
+    interval: 5s
+    storageDir: ./tempTestDir3012705204`,
+		},
+		{
+			description:   "item selector and link selector but no caption selector",
+			shouldBeError: true,
+			shouldBeEmpty: true,
+			conf: `---
+email:
+    smtpServerAddress: smtp://0.0.0.0:123
+    fromAddress: mynewsletter@example.com
+    toAddress: recipient@example.com
+    username: MyUser123
+    password: 123456-A_BCDE
+link_sources:
+    - name: site-38911
+      url: http://127.0.0.1:38911
+      itemSelector: "ul li"
+      linkSelector: "a"
+scraping:
+    interval: 5s
+    storageDir: ./tempTestDir3012705204`,
+		},
 	}
 
 	for _, tc := range testCases {

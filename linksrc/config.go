@@ -63,33 +63,6 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	c.URL = u
 
-	if _, ok := v["itemSelector"]; !ok {
-		return errors.New("link source config must contain an item selector")
-	}
-	is, err := parseCSSSelector(v["itemSelector"])
-	if err != nil {
-		return fmt.Errorf("can't parse item selector: %v", err)
-	}
-	c.ItemSelector = is
-
-	if _, ok := v["captionSelector"]; !ok {
-		return errors.New("link source config must contain a caption selector")
-	}
-	cs, err := parseCSSSelector(v["captionSelector"])
-	if err != nil {
-		return fmt.Errorf("can't parse caption selector: %v", err)
-	}
-	c.CaptionSelector = cs
-
-	if _, ok := v["linkSelector"]; !ok {
-		return errors.New("link source config must contain a link selector")
-	}
-	ls, err := parseCSSSelector(v["linkSelector"])
-	if err != nil {
-		return fmt.Errorf("can't parse link selector: %v", err)
-	}
-	c.LinkSelector = ls
-
 	var mi uint
 	if _, mok := v["maxItems"]; !mok {
 		mi = 5 // Set a low default so we don't accidentally process a ton of links
@@ -103,6 +76,40 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		}
 
 		c.MaxItems = mi
+	}
+
+	// Check for the presence of an itemSelector, captionSelector, and
+	// linkSelector. If there's only a linkSelector, we enable link auto-
+	// detection. Otherwise, we need all three fields.
+
+	if _, ok := v["itemSelector"]; ok {
+		is, err := parseCSSSelector(v["itemSelector"])
+		if err == nil {
+			c.ItemSelector = is
+		}
+	}
+
+	if _, ok := v["captionSelector"]; ok {
+		cs, err := parseCSSSelector(v["captionSelector"])
+		if err == nil {
+			c.CaptionSelector = cs
+		}
+	}
+
+	if _, ok := v["linkSelector"]; ok {
+		ls, err := parseCSSSelector(v["linkSelector"])
+		if err == nil {
+			c.LinkSelector = ls
+		}
+	}
+
+	if c.LinkSelector == nil {
+		return errors.New("you must provide a link selector")
+	}
+
+	if (c.ItemSelector == nil && c.CaptionSelector != nil) ||
+		(c.ItemSelector != nil && c.CaptionSelector == nil) {
+		return errors.New("if you provide an item selector, you must provide a caption selector and vice versa")
 	}
 
 	return nil

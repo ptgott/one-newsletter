@@ -179,19 +179,3 @@ func TestGenerateText(t *testing.T) {
 		t.Errorf("the text generated from GenerateBody does not match the golden file at %v", relativeGoldenTextFilePath)
 	}
 }
-
-func TestAdd(t *testing.T) {
-	ed := NewEmailData()
-	i := linksrc.LinkItem{
-		LinkURL: "http://www.example.com",
-		Caption: "Something happened!",
-	}
-
-	s := linksrc.Set{}
-	s.AddLinkItem(i)
-	ed.Add(s)
-
-	if len(ed.content) != 1 {
-		t.Error("could not add to the EmailData")
-	}
-}

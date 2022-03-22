@@ -3,7 +3,6 @@ package linksrc
 import (
 	"fmt"
 	"io"
-	"net/url"
 
 	"golang.org/x/net/html"
 )
@@ -14,6 +13,11 @@ import (
 func NewSet(r io.Reader, conf Config, code int) Set {
 	s := Set{
 		items: map[string]LinkItem{},
+	}
+
+	if r == nil {
+		s.AddMessage("could not read the HTML document in order to parse it")
+		return s
 	}
 
 	codesToMessages := map[int]string{
@@ -67,106 +71,69 @@ func NewSet(r io.Reader, conf Config, code int) Set {
 	// for html.Parse.
 	n, _ := html.Parse(r)
 
-	// Get all items listing content to link to
-	ls := conf.ItemSelector.MatchAll(n)
+	if n == nil {
+		s.AddMessage("Could not parse the HTML of this page.")
+		return s
+	}
+
+	var v map[string]LinkItem
+	var m []string
+
+	if conf.ItemSelector == nil || conf.CaptionSelector == nil {
+		v, m = autoDetectLinkItems(n, conf)
+	} else {
+		v, m = manuallyDetectLinkItems(n, conf)
+	}
+
+	for _, g := range m {
+		s.AddMessage(g)
+	}
+
+	// If the number of list items we scraped is over the limit, we'll
+	// arbitrarily exclude some list items from our search by making the
+	// length of our final result slice less than the length of the initial
+	// result slice.
 	var limit uint
 
-	if conf.MaxItems == 0 || len(ls) < int(conf.MaxItems) {
+	if conf.MaxItems == 0 || len(v) < int(conf.MaxItems) {
 		// i.e., disregard the limit if it doesn't apply
-		limit = uint(len(ls))
+		limit = uint(len(v))
 	} else {
 		limit = conf.MaxItems
 	}
 
-	// Find the link URL and caption for each list item. Note that if the
-	// number of list items we scraped is over the limit, we'll arbitrarily
-	// exclude some list items from our search by making the length of our
-	// final result slice less than the length of the initial result slice.
-	v := make([]LinkItem, limit)
-	for i := range v {
-		ns := conf.LinkSelector.MatchAll(ls[i])
-		if len(ns) > 1 {
-			s.AddMessage("The link selector is ambiguous, so we couldn't parse any link items.")
-			return s
-		}
-		if len(ns) == 0 {
-			// If the link selector has no matches, this is likely
-			// true of other list items as well. Return an error
-			// so we can let the user know.
-			s.AddMessage("There are no links in the list item. Double-check your configuration.")
-			return s
-		}
-
-		if ns[0].Data != "a" {
-			// The link selector doesn't match a link. This is likely
-			// true of other list items, so let the user know.
-			s.AddMessage(fmt.Sprintf("The link selector does not match a link but rather %v.", ns[0].Data))
-			return s
-		}
-
-		// Find the href attribute of the link
-		var h string // The string value of n's href attribute
-		for _, a := range ns[0].Attr {
-			if a.Key == "href" {
-				h = a.Val
-			}
-		}
-
-		u, err := url.Parse(h)
-
-		if err != nil {
-			s.AddMessage(fmt.Sprintf("Cannot parse the link URL %v", u))
-			return s
-		}
-
-		h = conf.URL.Scheme + "://" + conf.URL.Host + u.Path
-
-		cs := conf.CaptionSelector.MatchAll(ls[i])
-		var caption string
-		if len(cs) == 0 {
-			// No captions in this item--skip it
-			caption = ""
-		}
-		if len(cs) > 1 {
-			// The caption is ambiguous. Keep the link, since there's
-			// still value there, but let the user know.
-			caption = "[Missing caption due to ambiguous selector]"
-		}
-
-		if len(cs) == 1 {
-			// We're assuming that the first child node of the caption element
-			// will be a text node. The text node's Data contains its content.
-			// See: https://godoc.org/golang.org/x/net/html#Node
-			caption = cs[0].FirstChild.Data
-
-		}
-
-		s.AddLinkItem(LinkItem{
-			LinkURL: h,
-			Caption: caption,
-		})
-	}
+	s.items = enforceLimit(v, limit)
 
 	return s
+
+}
+
+// enforceLimit returns a copy of v after removing enough link items to satisfy
+// limit.
+func enforceLimit(v map[string]LinkItem, limit uint) map[string]LinkItem {
+	m := make(map[string]LinkItem, limit)
+
+	var i uint = 0
+	for j := range v {
+		if i < limit {
+			m[j] = v[j]
+		}
+		i++
+	}
+	return m
 
 }
 
 // Set represents a set of link items. It's not meant to be modified by
 // concurrent goroutines.
 type Set struct {
-	Name  string              // probably the publication the links came from
-	items map[string]LinkItem // LinkItems managed by the Set. Keys shouldn't be
-	// get and set directly, but rather via the functions AddLinkItem,
-	// RemoveLinkItem, and LinkItems
-	messages []string // messages to include in an email, e.g., due to errors
-}
-
-// AddLinkItem stores the LinkItem within the Set. Not to be used concurrently.
-func (s *Set) AddLinkItem(li LinkItem) {
-	if s.items == nil {
-		s.items = map[string]LinkItem{}
-	}
-	s.items[li.LinkURL] = li
+	// The publication that the links came from
+	Name string
+	// LinkItems managed by the Set. Should not get and set keys directly,
+	// but rather via the functions AddLinkItem, RemoveLinkItem, and LinkItems
+	items map[string]LinkItem
+	// Messages to include in an email, e.g., due to errors
+	messages []string
 }
 
 // RemoveLinkItem removes the LinkItem from the Set. Not to be used

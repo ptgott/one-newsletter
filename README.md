@@ -20,6 +20,15 @@ Run the following command:
 onenewsletter -config path/to/config.yaml
 ```
 
+### Link sources and link items
+
+One Newsletter works by scraping **link sources**, web pages with lists of links to other web pages. These lists of links are called **link items**, and each one is assumed to have both a link URL and a caption that describes the URL.
+
+You can configure One Newsletter to detect link items within a link source in two ways:
+
+- Automatically: You identify the CSS selector for the `a` elements that that contain the links you want in your newsletter, and One Newsletter will identify the best caption for each link based on its surrounding HTML.
+- Manually: You identify the CSS selector for each link item. Within each link item, you also identify the CSS selector for the caption and `a` element.
+
 ### Configuration
 
 One Newsletter reads its configuration from the YAML file at the `-config` path. The file has the following structure.
@@ -52,12 +61,11 @@ scraping:
 # link source includes a menu of links (e.g., a "Most Read" list), and
 # One Newsletter scrapes these menus for updates.
 #
-# You must include a name for each link source, and the URL of a web page
-# that includes a menu of links. You must also include the CSS selector of each
-# list item in the menu (itemSelector). Next, you must include two CSS selectors
-# that are _relative to_ the itemSelector: one for the text that will accompany
-# each link in the newsletter (captionSelector), and one for the HTML hyperlink
-# reference (linkSelector).
+# To enable automatic link item detection, you only need to supply the name,
+# URL, and linkSelector for each link source.
+#
+# To enable manual link item detection, you need to supply the name, URL,
+# itemSelector, captionSelector, and linkSelector for each link source.
 #
 # The following example tracks a site with a link menu that has the structure,
 # <ul>
@@ -92,6 +100,18 @@ By default, One Newsletter will periodically scrape the websites of your choice,
 - `-noemail`: Print an email's HTML to standard output rather than sending it. You can then redirect the HTML to a file of your choice or just read it from the terminal. Useful if you would like to run this on your local machine.
 
 You can use the `-oneoff` and `-noemail` flags together for a quick configuration check. One Newsletter will print the results of a scrape to your terminal without sending an email.
+
+### How automatic link item detection works
+
+Automatic link item detection works from the assumption that each link sits in a chunk of automatically generated HTML, e.g., the result of server-side template rendering or client-side JavaScript components. Once you'e supplied the CSS selector for the link element, One Newsletter identifies the surrounding chunk of HTML—the link item—then extracts all possible captions within that link item. Finally, One Newsletter identifies the best possible caption within each link item and uses that for the newsletter.
+
+To identify the link item that surrounds each `a` element, One Newsletter traverses each `a` element's parents in the HTML element tree. It recursively considers each parent until it identifies an HTML node that is (a) repeating and (b) not identifical to itself. Each of these nodes becomes the root node in a tree that will eventually contain a link item's caption.
+
+Next, One Newsletter conducts a recursive, depth-first search of each link item's child nodes for possible captions. For each child node, it extracts all of the text nodes below that child node, and keeps track of those child nodes' immediate parents.
+
+This information—the child node, its accumulated text nodes, and the nodes that the text was extracted from—becomes the basis for scoring each possible caption. The best caption is the one with the highest number of words and the lowest number of nodes. The idea here is that a link item includes a couple of elements, e.g., `p` or `div` elements, that contain the bulk of the description of a link. The more elements there are in a caption, the more likely these are to be bylines, tags, and other extraneous information.
+
+Descriptions often include inline elements, like the `strong` tag, to set formatting. These inline elements are ignored when calculating the score of each caption, since they are usually not involved in splitting the description into discrete parts.
 
 ## Testing
 
