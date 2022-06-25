@@ -1,5 +1,27 @@
 # ROADMAP
 
+## Doing now
+
+1. Run e2e tests in a separate goroutine rather than a child process. 
+
+  Use a minimal main.go file and extract most of the `main` function to a package that we can import in tests.
+
+### Within this
+
+- Separate `main.go` into functions, possibly in separate packages.
+
+- Rewrite e2e tests to use a single process:
+
+    - func TestMain
+    - func TestNewsletterEmailSending
+    - func TestNewsletterEmailUpdates
+    - func TestMaxLinkLimits
+    - func TestDBcleanup
+    - func TestEmailSendingWithBadScrapeConfig
+    - func TestNoEmailFlag
+    - func TestOneOffFlag
+    - func TestOneOffFlagWithNoEmailFlag
+
 ## Helping One Newsletter fetch links from all news sites
 
 1. Make it easier to fetch links from a news site with a varied layout, e.g., one featured link, a couple of sub-featured links, and a list of other links.
@@ -48,7 +70,6 @@ Make the One Newsletter HTTP client more sophisticated so it passes client class
 
 1. Update the third-party licenses table using a CI job (probably using GitHub Actions) and [`go-licenses`](https://github.com/google/go-licenses). Or use a make target.
 
-1. Run e2e tests in a separate goroutine rather than a child process. This will make it easier to manage the running application, measure test coverage, and edit configuration (since it can be kept in memory). This means using a minimal `main.go` file and extracting most of the `main` function to a package that we can import in tests. Many (if not most) CLI apps in Go run e2e tests like this.
 
 ## Making the newsletter more useful
 
