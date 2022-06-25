@@ -2,10 +2,9 @@ package email
 
 import (
 	"bytes"
-	"errors"
-	"io"
 	"mime/multipart"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -36,16 +35,6 @@ password: 123456-A_BCDE
 `,
 			shouldBeError: false,
 		},
-		{
-			description: "wrong scheme",
-			input: `smtpServerAddress: https://0.0.0.0:123
-fromAddress: mynewsletter@example.com
-toAddress: recipient@example.com
-username: MyUser123
-password: 123456-A_BCDE
-`,
-			shouldBeError: true,
-		},
 		// We should allow this because smtp:// is self evident
 		{
 			description: "no scheme",
@@ -56,58 +45,6 @@ username: MyUser123
 password: 123456-A_BCDE
 `,
 			shouldBeError: false,
-		},
-		{
-			description: "no port",
-			input: `smtpServerAddress: smtp://0.0.0.0
-fromAddress: mynewsletter@example.com
-toAddress: recipient@example.com
-username: MyUser123
-password: 123456-A_BCDE
-`,
-			shouldBeError: true,
-		},
-		{
-			description: "no password",
-			input: `smtpServerAddress: smtp://0.0.0.0:123
-fromAddress: mynewsletter@example.com
-toAddress: recipient@example.com
-username: MyUser123
-`,
-			shouldBeError: true,
-		},
-		{
-			description: "no username",
-			input: `smtpServerAddress: smtp://0.0.0.0:123
-fromAddress: mynewsletter@example.com
-toAddress: recipient@example.com
-password: 123456-A_BCDE
-`,
-			shouldBeError: true,
-		},
-		{
-			description: "no to address",
-			input: `smtpServerAddress: smtp://0.0.0.0:123
-fromAddress: mynewsletter@example.com
-username: MyUser123
-password: 123456-A_BCDE`,
-			shouldBeError: true,
-		},
-		{
-			description: "no from address",
-			input: `smtpServerAddress: smtp://0.0.0.0:123
-toAddress: recipient@example.com
-username: MyUser123
-password: 123456-A_BCDE`,
-			shouldBeError: true,
-		},
-		{
-			description: "no server address",
-			input: `fromAddress: mynewsletter@example.com
-toAddress: recipient@example.com
-username: MyUser123
-password: 123456-A_BCDE`,
-			shouldBeError: true,
 		},
 		{
 			description:   "not a map[string]string",
@@ -217,10 +154,13 @@ func TestSend(t *testing.T) {
 	var partMatches int
 	for {
 		p, err := rdr.NextPart()
-		if errors.As(err, &io.EOF) {
-			break
-		}
 		if err != nil {
+			// For some reason, NextPart() returns an EOF as an
+			// error _containing_ the string "EOF", not io.EOF
+			// itself.
+			if strings.Contains(err.Error(), "EOF") {
+				break
+			}
 			t.Fatal(err)
 		}
 		if _, ok := expectedParts[p.Header.Get("Content-Type")]; !ok {
@@ -239,4 +179,139 @@ func TestSend(t *testing.T) {
 		)
 	}
 
+}
+
+func TestCheckAndSetDefaults(t *testing.T) {
+	cases := []struct {
+		description        string
+		input              UserConfig
+		expected           UserConfig
+		expectErrSubstring string
+	}{
+		{
+			description: "straightforwarding valid case",
+			input: UserConfig{
+				SMTPServerHost:       "0.0.0.0",
+				SMTPServerPort:       "25",
+				FromAddress:          "mynewsletter@example.com",
+				ToAddress:            "recipient@example.com",
+				UserName:             "MyUser123",
+				Password:             "123456-A_BCDE",
+				SkipCertVerification: true,
+			},
+			expected: UserConfig{
+				SMTPServerHost:       "0.0.0.0",
+				SMTPServerPort:       "25",
+				FromAddress:          "mynewsletter@example.com",
+				ToAddress:            "recipient@example.com",
+				UserName:             "MyUser123",
+				Password:             "123456-A_BCDE",
+				SkipCertVerification: true,
+			},
+		},
+		{
+			description: "no port",
+			input: UserConfig{
+				SMTPServerHost:       "0.0.0.0",
+				FromAddress:          "mynewsletter@example.com",
+				ToAddress:            "recipient@example.com",
+				UserName:             "MyUser123",
+				Password:             "123456-A_BCDE",
+				SkipCertVerification: true,
+			},
+			expectErrSubstring: "port",
+			expected:           UserConfig{},
+		},
+		{
+			description: "no password",
+			input: UserConfig{
+				SMTPServerHost:       "0.0.0.0",
+				SMTPServerPort:       "25",
+				FromAddress:          "mynewsletter@example.com",
+				ToAddress:            "recipient@example.com",
+				UserName:             "MyUser123",
+				SkipCertVerification: true,
+			},
+			expectErrSubstring: "password",
+			expected:           UserConfig{},
+		},
+		{
+			description: "no username",
+			input: UserConfig{
+				SMTPServerHost:       "0.0.0.0",
+				SMTPServerPort:       "25",
+				FromAddress:          "mynewsletter@example.com",
+				ToAddress:            "recipient@example.com",
+				Password:             "123456-A_BCDE",
+				SkipCertVerification: true,
+			},
+			expectErrSubstring: "username",
+			expected:           UserConfig{},
+		},
+		{
+			description: "no to address",
+			input: UserConfig{
+				SMTPServerHost:       "0.0.0.0",
+				SMTPServerPort:       "25",
+				FromAddress:          "mynewsletter@example.com",
+				UserName:             "MyUser123",
+				Password:             "123456-A_BCDE",
+				SkipCertVerification: true,
+			},
+			expectErrSubstring: "\"to\" address",
+			expected:           UserConfig{},
+		},
+		{
+			description: "no from address",
+			input: UserConfig{
+				SMTPServerHost:       "0.0.0.0",
+				SMTPServerPort:       "25",
+				ToAddress:            "recipient@example.com",
+				UserName:             "MyUser123",
+				Password:             "123456-A_BCDE",
+				SkipCertVerification: true,
+			},
+			expectErrSubstring: "\"from\" address",
+			expected:           UserConfig{},
+		},
+		{
+			description: "no SMTP server host",
+			input: UserConfig{
+				SMTPServerPort:       "25",
+				FromAddress:          "mynewsletter@example.com",
+				ToAddress:            "recipient@example.com",
+				UserName:             "MyUser123",
+				Password:             "123456-A_BCDE",
+				SkipCertVerification: true,
+			},
+			expectErrSubstring: "host",
+			expected:           UserConfig{},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			actual, err := c.input.CheckAndSetDefaults()
+			if c.expectErrSubstring != "" && err == nil {
+				t.Fatalf(
+					"expected an error with substring %v but got nil",
+					c.expectErrSubstring,
+				)
+			}
+			if c.expectErrSubstring != "" &&
+				!strings.Contains(err.Error(), c.expectErrSubstring) {
+				t.Fatalf(
+					"expected error with substring %v but got %v",
+					c.expectErrSubstring,
+					err,
+				)
+			}
+			if c.expectErrSubstring == "" && err != nil {
+				t.Fatalf("expected no error but got %v", err)
+			}
+			if !reflect.DeepEqual(actual, c.expected) {
+				t.Fatalf("expected %+v but got %+v", c.expected, actual)
+			}
+		})
+	}
 }

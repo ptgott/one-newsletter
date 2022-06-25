@@ -10,6 +10,10 @@ import (
 	css "github.com/andybalholm/cascadia"
 )
 
+const (
+	defaultMaxItems = 5 // Set a low default so we don't accidentally process a ton of links
+)
+
 // Config stores options for the link source container.
 //
 // There is no support for grouped (i.e., comma-separated) selectors. This is
@@ -34,6 +38,38 @@ type Config struct {
 	MaxItems uint
 }
 
+// CheckAndSetDefaults validates c and either returns a copy of c with default
+// settings applied or returns an error due to an invalid configuration
+func (c *Config) CheckAndSetDefaults() (Config, error) {
+	nc := *c
+
+	if c.URL.String() == "" {
+		return Config{}, errors.New("the link source must include a URL")
+	}
+
+	if c.Name == "" {
+		return Config{}, errors.New("the link source name can't be blank")
+	}
+
+	if c.MaxItems <= 0 {
+		nc.MaxItems = defaultMaxItems
+	}
+
+	// Check for the presence of an itemSelector, captionSelector, and
+	// linkSelector. If there's only a linkSelector, we enable link auto-
+	// detection. Otherwise, we need all three fields.
+	if c.LinkSelector == nil {
+		return Config{}, errors.New("you must provide a link selector")
+	}
+
+	if (c.ItemSelector == nil && c.CaptionSelector != nil) ||
+		(c.ItemSelector != nil && c.CaptionSelector == nil) {
+		return Config{}, errors.New("if you provide an item selector, you must provide a caption selector and vice versa")
+	}
+
+	return nc, nil
+}
+
 // UnmarshalYAML implements the yaml.Unmarshaler interface. Validation is
 // performed here.
 func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -46,15 +82,12 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	n, ok := v["name"]
 	if !ok {
-		return errors.New("the config must name the link source")
-	}
-	if n == "" {
-		return errors.New("the link source name can't be blank")
+		n = ""
 	}
 	c.Name = n
 
 	if _, ok := v["url"]; !ok {
-		return errors.New("the link source must include a URL")
+		v["url"] = ""
 	}
 
 	u, err := parseURL(v["url"])
@@ -65,7 +98,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	var mi uint
 	if _, mok := v["maxItems"]; !mok {
-		mi = 5 // Set a low default so we don't accidentally process a ton of links
+		mi = 0
 	} else {
 		mii, err := strconv.Atoi(v["maxItems"])
 
@@ -75,15 +108,14 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			mi = uint(mii)
 		}
 
-		c.MaxItems = mi
 	}
-
-	// Check for the presence of an itemSelector, captionSelector, and
-	// linkSelector. If there's only a linkSelector, we enable link auto-
-	// detection. Otherwise, we need all three fields.
+	c.MaxItems = mi
 
 	if _, ok := v["itemSelector"]; ok {
 		is, err := parseCSSSelector(v["itemSelector"])
+		if err != nil {
+			return fmt.Errorf("cannot parse itemSelector: %v", err)
+		}
 		if err == nil {
 			c.ItemSelector = is
 		}
@@ -91,6 +123,9 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	if _, ok := v["captionSelector"]; ok {
 		cs, err := parseCSSSelector(v["captionSelector"])
+		if err != nil {
+			return fmt.Errorf("cannot parse captionSelector: %v", err)
+		}
 		if err == nil {
 			c.CaptionSelector = cs
 		}
@@ -98,18 +133,12 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	if _, ok := v["linkSelector"]; ok {
 		ls, err := parseCSSSelector(v["linkSelector"])
+		if err != nil {
+			return fmt.Errorf("cannot parse linkSelector: %v", err)
+		}
 		if err == nil {
 			c.LinkSelector = ls
 		}
-	}
-
-	if c.LinkSelector == nil {
-		return errors.New("you must provide a link selector")
-	}
-
-	if (c.ItemSelector == nil && c.CaptionSelector != nil) ||
-		(c.ItemSelector != nil && c.CaptionSelector == nil) {
-		return errors.New("if you provide an item selector, you must provide a caption selector and vice versa")
 	}
 
 	return nil

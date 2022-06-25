@@ -2,8 +2,10 @@ package linksrc
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
+	"github.com/andybalholm/cascadia"
 	"gopkg.in/yaml.v2"
 )
 
@@ -52,23 +54,6 @@ maxItems: 2.8
 			input:         `[]`,
 		},
 		{
-			description:   "no name",
-			shouldBeError: true,
-			input: `url: http://127.0.0.1:38911
-itemSelector: "ul li"
-captionSelector: "p"
-linkSelector: "a"`,
-		},
-		{
-			description:   "blank name",
-			shouldBeError: true,
-			input: `name: ""
-url: http://127.0.0.1:38911
-itemSelector: "ul li"
-captionSelector: "p"
-linkSelector: "a"`,
-		},
-		{
 			description:   "no url",
 			shouldBeError: true,
 			input: `name: site-38911
@@ -84,30 +69,6 @@ url: ""
 itemSelector: "ul li"
 captionSelector: "p"
 linkSelector: "a"`,
-		},
-		{
-			description:   "no item selector",
-			shouldBeError: true,
-			input: `name: site-38911
-url: http://127.0.0.1:38911
-captionSelector: "p"
-linkSelector: "a"`,
-		},
-		{
-			description:   "no caption selector",
-			shouldBeError: true,
-			input: `name: site-38911
-url: http://127.0.0.1:38911
-itemSelector: "ul li"
-linkSelector: "a"`,
-		},
-		{
-			description:   "no link selector",
-			shouldBeError: true,
-			input: `name: site-38911
-url: http://127.0.0.1:38911
-itemSelector: "ul li"
-captionSelector: "p"`,
 		},
 		{
 			description:   "unparseable item selector",
@@ -296,4 +257,96 @@ func TestValidateCSSSelector(t *testing.T) {
 		})
 	}
 
+}
+
+func TestCheckAndSetDefaults(t *testing.T) {
+	cases := []struct {
+		description        string
+		input              Config
+		expectErrSubstring string
+	}{
+		{
+			description: "straightforward valid case",
+			input: Config{
+				Name:            "site-38911",
+				URL:             mustParseURL("http://127.0.0.1:38911"),
+				LinkSelector:    cascadia.MustCompile("a"),
+				ItemSelector:    cascadia.MustCompile("ul li"),
+				CaptionSelector: cascadia.MustCompile("p"),
+			},
+		},
+		{
+			description:        "no link selector",
+			expectErrSubstring: "link selector",
+			input: Config{
+				Name:            "site-38911",
+				URL:             mustParseURL("http://127.0.0.1:38911"),
+				ItemSelector:    cascadia.MustCompile("ul li"),
+				CaptionSelector: cascadia.MustCompile("p"),
+			},
+		},
+		{
+			description:        "item selector and link selector but no caption selector",
+			expectErrSubstring: "caption selector",
+			input: Config{
+				Name:         "site-38911",
+				URL:          mustParseURL("http://127.0.0.1:38911"),
+				ItemSelector: cascadia.MustCompile("ul li"),
+				LinkSelector: cascadia.MustCompile("a"),
+			},
+		},
+		{
+			description: "no name",
+			input: Config{
+				URL:             mustParseURL("http://127.0.0.1:38911"),
+				LinkSelector:    cascadia.MustCompile("a"),
+				ItemSelector:    cascadia.MustCompile("ul li"),
+				CaptionSelector: cascadia.MustCompile("p"),
+			},
+			expectErrSubstring: "name",
+		},
+		{
+			description:        "no item selector",
+			expectErrSubstring: "item selector",
+			input: Config{
+				Name:            "site-38911",
+				URL:             mustParseURL("http://127.0.0.1:38911"),
+				LinkSelector:    cascadia.MustCompile("a"),
+				CaptionSelector: cascadia.MustCompile("p"),
+			},
+		},
+		{
+			description:        "no caption selector",
+			expectErrSubstring: "caption selector",
+			input: Config{
+				Name:         "site-38911",
+				URL:          mustParseURL("http://127.0.0.1:38911"),
+				LinkSelector: cascadia.MustCompile("a"),
+				ItemSelector: cascadia.MustCompile("ul li"),
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			_, err := c.input.CheckAndSetDefaults()
+			if c.expectErrSubstring != "" && err == nil {
+				t.Fatalf(
+					"expected an error with substring %v but got nil",
+					c.expectErrSubstring,
+				)
+			}
+			if c.expectErrSubstring != "" &&
+				!strings.Contains(err.Error(), c.expectErrSubstring) {
+				t.Fatalf(
+					"expected error with substring %v but got %v",
+					c.expectErrSubstring,
+					err,
+				)
+			}
+			if c.expectErrSubstring == "" && err != nil {
+				t.Fatalf("expected no error but got %v", err)
+			}
+		})
+	}
 }
