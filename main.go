@@ -76,12 +76,21 @@ func main() {
 
 	log.Info().Str("configPath", *configPath).Msg("successfully validated the config")
 
+	// Since this is a one-off or a test, set the data directory to an
+	// empty string to disable database operations.
+	if *oneOff || *noEmail {
+		config.Scraping.StorageDirPath = ""
+		log.Debug().Msg(
+			"disabling database operations",
+		)
+	}
+
 	// Declare channels between the main goroutine and the scrapers
 	errCh := make(chan error) // errors to print
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
 	httpClient := http.Client{
-		// Determined arbitrarily. We don't want to wait forever for a 
+		// Determined arbitrarily. We don't want to wait forever for a
 		// request to complete, but the cadence of the newsletter means
 		// that a minute of extra waiting is probably okay.
 		Timeout: time.Duration(60) * time.Second,
@@ -90,35 +99,22 @@ func main() {
 	// Start the main scraping/email sending loop
 	go func(tc <-chan time.Time, ec chan error) {
 		for {
-			// Block until the next scraping interval unless this 
+			// Block until the next scraping interval unless this
 			// is a one-time deal
 			if !*oneOff {
 				<-tc
 			}
 
-			// Create a new db instance per scrape so we can close 
-			// the db after the scrapers are finished and ensure 
+			// Create a new db instance per scrape so we can close
+			// the db after the scrapers are finished and ensure
 			// disk writes.
-			var db storage.KeyValue
-			if *oneOff == false {
-				db, err = storage.NewBadgerDB(
-					config.Scraping.StorageDirPath,
-					// A key inserted at one polling 
-					// interval expires two intervals
-					// later, meaning that the interval 
-					// after a link is collected,
-					// we can still compare it to newly 
-					// collected links.
-					2*config.Scraping.Interval,
-				)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Msg("problem connecting to the database")
-					continue // Maybe this was a transient error? Log it and move on.
-				}
-			} else {
-				db = &storage.NoOpDB{}
+			db, err := storage.SetUpDB(
+				config.Scraping.StorageDirPath,
+				config.Scraping.Interval,
+			)
+
+			if err != nil {
+				log.Error().Err(err).Msg("unable to set up the database")
 			}
 			log.Info().Msg("set up the database connection successfully")
 			log.Info().
