@@ -10,6 +10,11 @@
 
 - Separate `main.go` into functions, possibly in separate packages.
 
+  - Add a function for the main scraping loop. Otherwise, there are
+    some deeply nested `if` statements!
+  - How to handle flag parsing?
+  - How to handle signal management?
+
 - Rewrite e2e tests to use a single process:
 
     - func TestMain

@@ -81,30 +81,34 @@ func main() {
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
 	httpClient := http.Client{
-		// Determined arbitrarily. We don't want to wait forever for a request
-		// to complete, but the cadence of the newsletter means that a minute
-		// of extra waiting is probably okay.
+		// Determined arbitrarily. We don't want to wait forever for a 
+		// request to complete, but the cadence of the newsletter means
+		// that a minute of extra waiting is probably okay.
 		Timeout: time.Duration(60) * time.Second,
 	}
 
 	// Start the main scraping/email sending loop
 	go func(tc <-chan time.Time, ec chan error) {
 		for {
-			// Block until the next scraping interval unless this is a one-time
-			// deal
+			// Block until the next scraping interval unless this 
+			// is a one-time deal
 			if !*oneOff {
 				<-tc
 			}
 
-			// Create a new db instance per scrape so we can close the db
-			// after the scrapers are finished and ensure disk writes.
+			// Create a new db instance per scrape so we can close 
+			// the db after the scrapers are finished and ensure 
+			// disk writes.
 			var db storage.KeyValue
 			if *oneOff == false {
 				db, err = storage.NewBadgerDB(
 					config.Scraping.StorageDirPath,
-					// A key inserted at one polling interval expires two intervals
-					// later, meaning that the interval after a link is collected,
-					// we can still compare it to newly collected links.
+					// A key inserted at one polling 
+					// interval expires two intervals
+					// later, meaning that the interval 
+					// after a link is collected,
+					// we can still compare it to newly 
+					// collected links.
 					2*config.Scraping.Interval,
 				)
 				if err != nil {
