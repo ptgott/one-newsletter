@@ -6,12 +6,33 @@
 
   Use a minimal main.go file and extract most of the `main` function to a package that we can import in tests.
 
-### Within this
+### Within this: now
+
+- Add a function for the main scraping loop. Otherwise, there are
+  some deeply nested `if` statements!
+
+  Right now, the main `for` loop is nested in a `go` statement.
+  It would probably make more sense to nest the `go` in a `for` loop
+  instead. That way, we could run the scrape function in a goroutine.
+  We could also:
+
+  - Read from the ticker channel with each loop iteration
+  - If using `oneOff`, call the scrape function and exiting before even
+    entering the loop.
+
+  We'd move everything inside the `for` loop after the statement that
+  reads from the ticker into a `runScrape` function. The problem is
+  that **there are a ton of variables the scrape relies on** that are
+  defined in the `main` function, so we'd need to add those as parameters
+  in `runScrape`. This ends up being a ton of parameters.
+
+  Since we definitely want a `runScrape` function, **start by simplifying
+  the parameters we'd need to pass to it!**
+
+### Within this: next
 
 - Separate `main.go` into functions, possibly in separate packages.
 
-  - Add a function for the main scraping loop. Otherwise, there are
-    some deeply nested `if` statements!
   - How to handle flag parsing?
   - How to handle signal management?
 
