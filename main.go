@@ -16,6 +16,134 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// runScrape conducts a single scrape and email cycle, sending any errors to
+// the error channel ec. It reads the user config anew at the beginning of
+// each cycle.
+func runScrape(ec chan error, config userconfig.Meta) {
+
+	httpClient := http.Client{
+		// Determined arbitrarily. We don't want to wait forever for a
+		// request to complete, but the cadence of the newsletter means
+		// that a minute of extra waiting is probably okay.
+		Timeout: time.Duration(60) * time.Second,
+	}
+
+	// Create a new db instance per scrape so we can close
+	// the db after the scrapers are finished and ensure
+	// disk writes.
+	db, err := storage.SetUpDB(
+		config.Scraping.StorageDirPath,
+		config.Scraping.Interval,
+	)
+
+	if err != nil {
+		log.Error().Err(err).Msg("unable to set up the database")
+	}
+	log.Info().Msg("set up the database connection successfully")
+	log.Info().
+		Int("count", len(config.LinkSources)).
+		Msg("launching scrapers")
+	var wg sync.WaitGroup
+	d := html.NewEmailData()
+
+	// buffer the results of the latest scrape so we can perform a diff
+	// with the previous scrape and build an email body
+	emailBuildCh := make(chan linksrc.Set, len(config.LinkSources))
+	wg.Add(len(config.LinkSources))
+	for _, ls := range config.LinkSources {
+		go func(
+			lc linksrc.Config,
+			g *sync.WaitGroup,
+			bc chan linksrc.Set,
+			ech chan error,
+		) {
+			defer g.Done()
+			// Try the scrape request only once. If we get a non-2xx
+			// response, it's probably not something we can expect to
+			// clear up after retrying.
+			r, err := httpClient.Get(lc.URL.String())
+			if err != nil {
+				ech <- err
+				return
+			}
+			defer r.Body.Close()
+			s := linksrc.NewSet(r.Body, lc, r.StatusCode)
+
+			bc <- s
+
+		}(ls, &wg, emailBuildCh, ec)
+	}
+	wg.Wait()
+	// TODO: Having the receiver close the channel is not how close()
+	// was intended to be used, but senders have no way of knowing
+	// when to close the channel, and we need to use close() in order
+	// to range over the channel below.
+	close(emailBuildCh)
+	log.Info().
+		Msg("done with one round of scraping")
+	for set := range emailBuildCh {
+		// See if any items are missing in the db. If so, store them
+		// and add them to a new email body.
+		for _, item := range set.LinkItems() {
+			// Read returns a "key not found" error if a key is not found.
+			// https://pkg.go.dev/github.com/dgraph-io/badger#Txn.Get
+			_, err := db.Read(item.Key())
+			// If the Item already exists in the database,
+			if err == nil {
+				set.RemoveLinkItem(item)
+			} else {
+				log.Info().Msg("storing a link item in the database")
+				err = db.Put(item.NewKVEntry())
+				if err != nil {
+					log.Error().
+						Err(err).
+						Msg("error saving a link item")
+					continue
+				}
+			}
+		}
+		d.Add(set)
+		log.Info().
+			Int("itemCount", set.CountLinkItems()).
+			Str("setName", set.Name).
+			Msg("added items to the email")
+	}
+
+	// Get rid of old keys just before we close
+	err = db.Cleanup()
+	if err != nil {
+		log.Error().Err(err).Msg("error cleaning up the database")
+	}
+	// Close the connection here so BadgerDB can flush to disk.
+	// Otherwise, BadgerDB has to reach its MaxTableSize before it
+	// flushes--we want to write the results of each scraping round to
+	// disk, and there's no need to keep the DB connection open while
+	// waiting for the next scrape.
+	//
+	// https://pkg.go.dev/github.com/dgraph-io/badger#readme-i-don-t-see-any-disk-writes-why
+	db.Close()
+	log.Info().Msg("closed the database to flush data to disk")
+	bod := d.GenerateBody()
+	txt := d.GenerateText()
+	log.Info().Msg("attempting to send an email")
+
+	if *noEmail {
+		os.Stdout.Write([]byte(bod))
+	} else {
+		err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
+		if err != nil {
+			log.Error().Err(err).Msg("error sending an email")
+		}
+	}
+
+	// We're only doing this once, so get out of the main loop
+	if *oneOff {
+		close(errCh)
+		return
+	}
+
+}
+
 func main() {
 	// Log with filename and line number. This writes to stderr, so it should
 	// be thread safe.
@@ -89,137 +217,18 @@ func main() {
 	errCh := make(chan error) // errors to print
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
-	httpClient := http.Client{
-		// Determined arbitrarily. We don't want to wait forever for a
-		// request to complete, but the cadence of the newsletter means
-		// that a minute of extra waiting is probably okay.
-		Timeout: time.Duration(60) * time.Second,
-	}
-
-	// Start the main scraping/email sending loop
 	go func(tc <-chan time.Time, ec chan error) {
-		for {
-			// Block until the next scraping interval unless this
-			// is a one-time deal
-			if !*oneOff {
-				<-tc
-			}
+		// Run the first scrape immediately
+		runScrape(ec)
 
-			// Create a new db instance per scrape so we can close
-			// the db after the scrapers are finished and ensure
-			// disk writes.
-			db, err := storage.SetUpDB(
-				config.Scraping.StorageDirPath,
-				config.Scraping.Interval,
-			)
+		// enter the main scraping/email sending loop
+		for !*oneOff {
 
-			if err != nil {
-				log.Error().Err(err).Msg("unable to set up the database")
-			}
-			log.Info().Msg("set up the database connection successfully")
-			log.Info().
-				Int("count", len(config.LinkSources)).
-				Msg("launching scrapers")
-			var wg sync.WaitGroup
-			d := html.NewEmailData()
+			<-tc
 
-			// buffer the results of the latest scrape so we can perform a diff
-			// with the previous scrape and build an email body
-			emailBuildCh := make(chan linksrc.Set, len(config.LinkSources))
-			wg.Add(len(config.LinkSources))
-			for _, ls := range config.LinkSources {
-				go func(
-					lc linksrc.Config,
-					g *sync.WaitGroup,
-					bc chan linksrc.Set,
-					ech chan error,
-				) {
-					defer g.Done()
-					// Try the scrape request only once. If we get a non-2xx
-					// response, it's probably not something we can expect to
-					// clear up after retrying.
-					r, err := httpClient.Get(lc.URL.String())
-					if err != nil {
-						ech <- err
-						return
-					}
-					defer r.Body.Close()
-					s := linksrc.NewSet(r.Body, lc, r.StatusCode)
-
-					bc <- s
-
-				}(ls, &wg, emailBuildCh, ec)
-			}
-			wg.Wait()
-			// TODO: Having the receiver close the channel is not how close()
-			// was intended to be used, but senders have no way of knowing
-			// when to close the channel, and we need to use close() in order
-			// to range over the channel below.
-			close(emailBuildCh)
-			log.Info().
-				Msg("done with one round of scraping")
-			for set := range emailBuildCh {
-				// See if any items are missing in the db. If so, store them
-				// and add them to a new email body.
-				for _, item := range set.LinkItems() {
-					// Read returns a "key not found" error if a key is not found.
-					// https://pkg.go.dev/github.com/dgraph-io/badger#Txn.Get
-					_, err := db.Read(item.Key())
-					// If the Item already exists in the database,
-					if err == nil {
-						set.RemoveLinkItem(item)
-					} else {
-						log.Info().Msg("storing a link item in the database")
-						err = db.Put(item.NewKVEntry())
-						if err != nil {
-							log.Error().
-								Err(err).
-								Msg("error saving a link item")
-							continue
-						}
-					}
-				}
-				d.Add(set)
-				log.Info().
-					Int("itemCount", set.CountLinkItems()).
-					Str("setName", set.Name).
-					Msg("added items to the email")
-			}
-
-			// Get rid of old keys just before we close
-			err = db.Cleanup()
-			if err != nil {
-				log.Error().Err(err).Msg("error cleaning up the database")
-			}
-			// Close the connection here so BadgerDB can flush to disk.
-			// Otherwise, BadgerDB has to reach its MaxTableSize before it
-			// flushes--we want to write the results of each scraping round to
-			// disk, and there's no need to keep the DB connection open while
-			// waiting for the next scrape.
-			//
-			// https://pkg.go.dev/github.com/dgraph-io/badger#readme-i-don-t-see-any-disk-writes-why
-			db.Close()
-			log.Info().Msg("closed the database to flush data to disk")
-			bod := d.GenerateBody()
-			txt := d.GenerateText()
-			log.Info().Msg("attempting to send an email")
-
-			if *noEmail {
-				os.Stdout.Write([]byte(bod))
-			} else {
-				err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
-				if err != nil {
-					log.Error().Err(err).Msg("error sending an email")
-				}
-			}
-
-			// We're only doing this once, so get out of the main loop
-			if *oneOff {
-				close(errCh)
-				return
-			}
+			go runScrape(ec)
 		}
-	}(scrapeCadence.C, errCh)
+	}(scrapeCadence, errCh)
 
 	// At this point, the main goroutine blocks until there's an error
 	for {
