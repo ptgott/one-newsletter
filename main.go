@@ -19,7 +19,7 @@ import (
 // runScrape conducts a single scrape and email cycle, sending any errors to
 // the error channel ec. It reads the user config anew at the beginning of
 // each cycle.
-func runScrape(ec chan error, config userconfig.Meta) {
+func runScrape(ec chan error, config *userconfig.Meta) {
 
 	httpClient := http.Client{
 		// Determined arbitrarily. We don't want to wait forever for a
@@ -127,7 +127,7 @@ func runScrape(ec chan error, config userconfig.Meta) {
 	txt := d.GenerateText()
 	log.Info().Msg("attempting to send an email")
 
-	if *noEmail {
+	if config.Scraping.NoEmail {
 		os.Stdout.Write([]byte(bod))
 	} else {
 		err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
@@ -137,8 +137,8 @@ func runScrape(ec chan error, config userconfig.Meta) {
 	}
 
 	// We're only doing this once, so get out of the main loop
-	if *oneOff {
-		close(errCh)
+	if config.Scraping.OneOff {
+		close(ec)
 		return
 	}
 
@@ -204,6 +204,8 @@ func main() {
 
 	log.Info().Str("configPath", *configPath).Msg("successfully validated the config")
 
+	config.Scraping.OneOff = *oneOff
+	config.Scraping.NoEmail = *noEmail
 	// Since this is a one-off or a test, set the data directory to an
 	// empty string to disable database operations.
 	if *oneOff || *noEmail {
@@ -218,17 +220,22 @@ func main() {
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
 	go func(tc <-chan time.Time, ec chan error) {
+		// The first email will be sent after the scrape interval
+		if !*oneOff {
+			<-tc
+		}
+
 		// Run the first scrape immediately
-		runScrape(ec)
+		runScrape(ec, config)
 
 		// enter the main scraping/email sending loop
 		for !*oneOff {
 
 			<-tc
 
-			go runScrape(ec)
+			go runScrape(ec, config)
 		}
-	}(scrapeCadence, errCh)
+	}(scrapeCadence.C, errCh)
 
 	// At this point, the main goroutine blocks until there's an error
 	for {

@@ -8,10 +8,8 @@
 
 ### Within this: now
 
-- Currently, `runScrape` reads from the `oneOff` and `noEmail` flags, which
-  are not available to it. Adding these flags as parameters would be a poor
-  interface, so consider another way to go. For example, add these fields to
-  `userconfig.Meta`.
+- Added the `oneOff` and `noEmail` flags to the `Scraping` config struct, but
+  need to write to the struct somewhere in the `main` function.
   
 - Move the `runScrape` function into a separate package so we can import it
   into tests.

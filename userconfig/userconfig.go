@@ -31,6 +31,10 @@ type Meta struct {
 type Scraping struct {
 	Interval       time.Duration
 	StorageDirPath string
+	// Run the scraper once, then exit
+	OneOff bool
+	// Print email text to stdout to help test configuration
+	NoEmail bool
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler. It validates and parses
