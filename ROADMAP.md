@@ -8,21 +8,37 @@
 
 ### Within this: now
 
-- Rewrite e2e tests to use a single process:
-    - func TestMain
+- Rewrite e2e tests to use a single process. 
 
+  `exec.Command` calls to replace:
+
+  - **e2e/e2e_test.go:34** build the app in `TestMain`
+  - **e2e/e2e_test.go:98** run One Newsletter
+  - **e2e/e2e_test.go:200** run One Newsletter
+  - **e2e/e2e_test.go:330** run One Newsletter
+  - **e2e/e2e_test.go:453** run One Newsletter
+  - **e2e/e2e_test.go:562** run One Newsletter
+  - **e2e/e2e_test.go:649** run One Newsletter
+  - **e2e/e2e_test.go:749** run One Newsletter
+  - **e2e/e2e_test.go:834** run One Newsletter
+
+  Instead of these calls, we should call `scrape.Run` with a particular config. 
+  We can then remove the first `exec.Command` call from `TestMain`.
+
+  **One complication** is that the e2e tests sometimes test scrape interval
+  logic, so the wrapper function we import and run in the tests needs to read
+  from the ticker channel. `scrape.Run` does not currently do this.
+
+  **FIRST**: Edit `scrape.Run` to include the scrape interval logic 
+  currently placed in the `main` function.
+
+  - Also edit **func createAppConfig**: This should create a `userconfig.Meta` 
+    directly and return it rather than write a file to a path using a template.
+
+  
 ### Within this: next
 
 - Rewrite e2e tests to use a single process:
-
-    - func TestNewsletterEmailSending
-    - func TestNewsletterEmailUpdates
-    - func TestMaxLinkLimits
-    - func TestDBcleanup
-    - func TestEmailSendingWithBadScrapeConfig
-    - func TestNoEmailFlag
-    - func TestOneOffFlag
-    - func TestOneOffFlagWithNoEmailFlag
 
 ## Helping One Newsletter fetch links from all news sites
 
