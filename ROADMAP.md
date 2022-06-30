@@ -8,17 +8,13 @@
 
 ### Within this: now
 
-- Added the `oneOff` and `noEmail` flags to the `Scraping` config struct, but
-  need to write to the struct somewhere in the `main` function.
-  
-- Move the `runScrape` function into a separate package so we can import it
-  into tests.
+- Rewrite e2e tests to use a single process:
+    - func TestMain
 
 ### Within this: next
 
 - Rewrite e2e tests to use a single process:
 
-    - func TestMain
     - func TestNewsletterEmailSending
     - func TestNewsletterEmailUpdates
     - func TestMaxLinkLimits
@@ -48,6 +44,8 @@ Make the One Newsletter HTTP client more sophisticated so it passes client class
 
 - More helpful warnings about bad link selectors (e.g., not specific enough).
 - Add verbose logs re: where in the automatic link parsing process One Newsletter failed to parse links. This would be useful for `oneoff`/`noemail`.
+- Send the first email right away rather than after the scraping interval. This
+  will make it easier to determine whether the app is running as expected.
 
 1. Include help text when the CLI is run without arguments. Also add a `help` subcommand and flag.
 
