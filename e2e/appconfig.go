@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+
+	"github.com/ptgott/one-newsletter/userconfig"
 )
 
 // appConfigOptions is used to fill in a config template with details unique to
@@ -33,36 +35,41 @@ type mockLinksrcInfo struct {
 	SelectorsOverride string
 }
 
-// createAppConfig writes a configuration YAML doc to the given path.
-// Use this configuration to start the e2e test environment
-func createAppConfig(path string, opts appConfigOptions) error {
-	configTemplate := `---
-email:
-    smtpServerAddress: {{ .SMTPServerAddress }}
-    fromAddress: mynewsletter@example.com
-    toAddress: recipient@example.com
-    username: myuser
-    password: password123
-    skipCertVerification: true
-link_sources:
-{{ range .LinkSources }}
-    - name: {{ .Name }}
-      url: {{ .URL }}
-	  {{- if ne .SelectorsOverride "" }}	  
-{{ .SelectorsOverride }}
-{{ else }}
-      itemSelector: "ul li"
-      captionSelector: "p"
-      linkSelector: "a"
-{{ end }}
-      maxItems: {{ .MaxItems }}
-{{ end }}
-scraping:
-    interval: {{ .PollInterval }}
-    storageDir: {{ .StorageDir }}
-`
+// createAppConfig creates a user configuration based on the provided
+// appConfigOptions. Only options within appConfigOptions are required. The
+// are populated automatically using defaults intended for e2e testing.
+func createAppConfig(path string, opts appConfigOptions) userconfig.Meta {
+	config := userconfig.Meta{
+	    EmailSettings: email.UserConfig{
+		SMTPServerHost: opts.SMTPServerAddress,
+		FromAddress: "mynewsletter@example.com",
+		ToAddress: "recipient@example.com",
+		UserName: "myuser",
+		Password: "password123",
+		SkipCertVerification: true,
+	    },
+	Scraping: userconfig.Scraping{
+	    Interval: opts.PollInterval,
+	    StorageDirPath: opts.StorageDir,
+	},
+    }
 
-	tmpl, err := template.New("conf").Parse(configTemplate)
+    config.LinkSources = make([]linksrc.Config, len(opts.LinkSources))
+    for i, ls := range opts.LinkSources{
+config.LinkSources[i] = linksrc.Config{
+    Name: ls.Name,
+    URL: ls.URL
+    MaxItems: ls.MaxItems,
+}
+
+// TODO: Assign SelectorsOverride/default selectors.
+if !opts.SelectorsOverride{
+    config.LinkSources[i].itemSelector = "ul li"
+    config.LinkSources[i].linkSelector = "p" 
+config.LinkSources[i].captionSelector = "a"
+}
+    }
+	    
 
 	// This means the config template string was written incorrectly. Not
 	// an issue with the application itself.
