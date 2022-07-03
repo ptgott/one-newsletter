@@ -22,13 +22,14 @@
   - **e2e/e2e_test.go:749** run One Newsletter
   - **e2e/e2e_test.go:834** run One Newsletter
 
-  Instead of these calls, we should call `scrape.Run` with a particular config. 
-  We can then remove the first `exec.Command` call from `TestMain`.
+  Instead of these calls, we should call `scrape.StartLoop` with a particular config. 
+  We can then remove the first `exec.Command` call from `TestMain`. 
 
-  First, edit **func createAppConfig**: This should create a `userconfig.Meta` 
-  directly and return it rather than write a file to a path using a template.
+  Note that `createAppConfig` adds a bunch of boilerplate to a userconfig.Meta.
+  This might be useful for our purposes! Rather than replacing all
+  `createAppConfig` calls, change the function to return a `userconfig.Meta`
+  with some defaults.
 
-  
 ### Within this: next
 
 - Rewrite e2e tests to use a single process:
