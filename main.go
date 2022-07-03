@@ -87,23 +87,7 @@ func main() {
 	errCh := make(chan error) // errors to print
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
-	go func(tc <-chan time.Time, ec chan error) {
-		// The first email will be sent after the scrape interval
-		if !*oneOff {
-			<-tc
-		}
-
-		// Run the first scrape immediately
-		scrape.Run(ec, config)
-
-		// enter the main scraping/email sending loop
-		for !*oneOff {
-
-			<-tc
-
-			go scrape.Run(ec, config)
-		}
-	}(scrapeCadence.C, errCh)
+	go scrape.StartLoop(scrapeCadence.C, errCh, config)
 
 	// At this point, the main goroutine blocks until there's an error
 	for {

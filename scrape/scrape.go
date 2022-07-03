@@ -140,3 +140,25 @@ func Run(ec chan error, config *userconfig.Meta) {
 	}
 
 }
+
+// StartLoop begins the main sequence of scraping websites for links every
+// interval (defined by tc) with the provided config. Sends any errors
+// to channel ec.
+func StartLoop(tc <-chan time.Time, ec chan error, c *userconfig.Meta) {
+
+	// The first email will be sent after the scrape interval
+	if !c.Scraping.OneOff {
+		<-tc
+	}
+
+	// Run the first scrape immediately
+	Run(ec, c)
+
+	// enter the main scraping/email sending loop
+	for !c.Scraping.OneOff {
+
+		<-tc
+
+		go Run(ec, c)
+	}
+}
