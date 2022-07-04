@@ -1,11 +1,12 @@
 package e2e
 
 import (
-	"bytes"
-	"fmt"
-	"html/template"
-	"os"
+	"net/url"
+	"time"
 
+	"github.com/andybalholm/cascadia"
+	"github.com/ptgott/one-newsletter/email"
+	"github.com/ptgott/one-newsletter/linksrc"
 	"github.com/ptgott/one-newsletter/userconfig"
 )
 
@@ -24,78 +25,68 @@ type appConfigOptions struct {
 
 // mockLinksrcInfo contains metadata about test HTTP servers so we can use it
 // to configure scraping targets for the application within a test environment.
-//
-// Fields are exported so we can use them in templates.
 type mockLinksrcInfo struct {
-	URL      string
-	Name     string
+	// Required
+	URL string
+	// Required
+	Name string
+	// Required
 	MaxItems int
-	// The linkSelector, captionSelector, and itemSelector in a link source
-	// config. Leave blank if you would like to use valid defaults.
-	SelectorsOverride string
+	// Not required
+	LinkSelector string
+	// Not required
+	CaptionSelector string
+	// Not required
+	ItemSelector string
 }
 
 // createAppConfig creates a user configuration based on the provided
 // appConfigOptions. Only options within appConfigOptions are required. The
 // are populated automatically using defaults intended for e2e testing.
-func createAppConfig(path string, opts appConfigOptions) userconfig.Meta {
+func createAppConfig(path string, opts appConfigOptions) (userconfig.Meta, error) {
+	v, err := time.ParseDuration(opts.PollInterval)
+	if err != nil {
+		return userconfig.Meta{}, err
+	}
 	config := userconfig.Meta{
-	    EmailSettings: email.UserConfig{
-		SMTPServerHost: opts.SMTPServerAddress,
-		FromAddress: "mynewsletter@example.com",
-		ToAddress: "recipient@example.com",
-		UserName: "myuser",
-		Password: "password123",
-		SkipCertVerification: true,
-	    },
-	Scraping: userconfig.Scraping{
-	    Interval: opts.PollInterval,
-	    StorageDirPath: opts.StorageDir,
-	},
-    }
-
-    config.LinkSources = make([]linksrc.Config, len(opts.LinkSources))
-    for i, ls := range opts.LinkSources{
-config.LinkSources[i] = linksrc.Config{
-    Name: ls.Name,
-    URL: ls.URL
-    MaxItems: ls.MaxItems,
-}
-
-// TODO: Assign SelectorsOverride/default selectors.
-if !opts.SelectorsOverride{
-    config.LinkSources[i].itemSelector = "ul li"
-    config.LinkSources[i].linkSelector = "p" 
-config.LinkSources[i].captionSelector = "a"
-}
-    }
-	    
-
-	// This means the config template string was written incorrectly. Not
-	// an issue with the application itself.
-	if err != nil {
-		return fmt.Errorf("couldn't parse the application config template: %v", err)
+		EmailSettings: email.UserConfig{
+			SMTPServerHost:       opts.SMTPServerAddress,
+			FromAddress:          "mynewsletter@example.com",
+			ToAddress:            "recipient@example.com",
+			UserName:             "myuser",
+			Password:             "password123",
+			SkipCertVerification: true,
+		},
+		Scraping: userconfig.Scraping{
+			Interval:       v,
+			StorageDirPath: opts.StorageDir,
+		},
 	}
 
-	var config bytes.Buffer
-
-	err = tmpl.Execute(&config, opts)
-
-	// This is an issue with the test environment, not the application
-	if err != nil {
-		return fmt.Errorf("couldn't populate the application config template: %v", err)
+	config.LinkSources = make([]linksrc.Config, len(opts.LinkSources))
+	for i, ls := range opts.LinkSources {
+		u, err := url.Parse(ls.URL)
+		if err != nil {
+			return userconfig.Meta{}, err
+		}
+		config.LinkSources[i] = linksrc.Config{
+			Name:            ls.Name,
+			URL:             *u,
+			MaxItems:        uint(ls.MaxItems),
+			ItemSelector:    cascadia.MustCompile("ul li"),
+			CaptionSelector: cascadia.MustCompile("p"),
+			LinkSelector:    cascadia.MustCompile("a"),
+		}
+		switch {
+		case ls.CaptionSelector != "":
+			config.LinkSources[i].CaptionSelector = cascadia.MustCompile(ls.CaptionSelector)
+		case ls.ItemSelector != "":
+			config.LinkSources[i].ItemSelector = cascadia.MustCompile(ls.ItemSelector)
+		case ls.LinkSelector != "":
+			config.LinkSources[i].LinkSelector = cascadia.MustCompile(ls.LinkSelector)
+		}
 	}
 
-	cf, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("couldn't create the config file: %v", err)
-	}
-
-	_, err = cf.Write(config.Bytes())
-	if err != nil {
-		return fmt.Errorf("couldn't write to the config file: %v", err)
-	}
-
-	return nil
+	return config, nil
 
 }

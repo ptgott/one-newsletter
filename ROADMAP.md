@@ -23,12 +23,8 @@
   - **e2e/e2e_test.go:834** run One Newsletter
 
   Instead of these calls, we should call `scrape.StartLoop` with a particular config. 
-  We can then remove the first `exec.Command` call from `TestMain`. 
-
-  Note that `createAppConfig` adds a bunch of boilerplate to a userconfig.Meta.
-  This might be useful for our purposes! Rather than replacing all
-  `createAppConfig` calls, change the function to return a `userconfig.Meta`
-  with some defaults.
+  We can then remove the first `exec.Command` call from `TestMain`. Also use the
+  new function signature for `createAppConfig` in these calls.
 
 ### Within this: next
 
