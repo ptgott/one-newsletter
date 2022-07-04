@@ -40,10 +40,10 @@ type mockLinksrcInfo struct {
 	ItemSelector string
 }
 
-// createAppConfig creates a user configuration based on the provided
+// createUserConfig creates a user configuration based on the provided
 // appConfigOptions. Only options within appConfigOptions are required. The
 // are populated automatically using defaults intended for e2e testing.
-func createAppConfig(path string, opts appConfigOptions) (userconfig.Meta, error) {
+func createUserConfig(path string, opts appConfigOptions) (userconfig.Meta, error) {
 	v, err := time.ParseDuration(opts.PollInterval)
 	if err != nil {
 		return userconfig.Meta{}, err
