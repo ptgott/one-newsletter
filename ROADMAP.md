@@ -10,6 +10,13 @@
 
 - Rewrite e2e tests to use a single process. 
 
+  **First**, edit `scrape.StartLoop` to include a parameter for a channel we can
+  use to stop the goroutine. Left a TODO for this in
+  `TestNewsletterEmailSending`. This will replace the use of
+  `cmd.Process.Signal`. **Implemented this** but need to incorporate it into the
+  first `scrape.StartLoop` call we're adding to the e2e tests (in
+  `TEstNewsletterEmailSending`).
+
   `exec.Command` calls to replace:
 
   - **e2e/e2e_test.go:34** build the app in `TestMain`
@@ -24,7 +31,7 @@
 
   Instead of these calls, we should call `scrape.StartLoop` with a particular config. 
   We can then remove the first `exec.Command` call from `TestMain`. Also use the
-  new function signature for `createAppConfig` in these calls.
+  new `createUserConfig` function.
 
 ### Within this: next
 
@@ -75,6 +82,10 @@ Make the One Newsletter HTTP client more sophisticated so it passes client class
 1. Come up with a release process (i.e., let people install this without building from source).
 
 ## Making development easier
+
+1. Use a mock clock in e2e tests when calling `scrape.StartLoop` with a
+   `time.Ticker` channel. This way, we can advance the clock manually to run
+   tests, and don't need to wait as much.
 
 1. Add a Makefile with “test-unit” and “test-e2e” targets. Also measure unit test coverage in a make target.
 

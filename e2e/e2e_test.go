@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ptgott/one-newsletter/scrape"
 	"github.com/ptgott/one-newsletter/smtptest"
 
 	"github.com/rs/zerolog/log"
@@ -81,8 +82,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
@@ -94,21 +94,14 @@ func TestNewsletterEmailSending(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-	)
+	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	ec := make(chan error)
 
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	if err = cmd.Start(); err != nil {
-		t.Fatalf("couldn't start the app: %v", err)
-	}
+	go scrape.StartLoop(tk, ec, config)
 
 	time.Sleep(time.Duration(stopIntervalS) * time.Second)
 
+	// TODO: Find a way to interrupt the scraper
 	err = cmd.Process.Signal(os.Interrupt)
 
 	// At this point you need to find the process and kill it manually.

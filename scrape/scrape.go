@@ -143,10 +143,11 @@ func Run(ec chan error, config *userconfig.Meta) {
 
 // StartLoop begins the main sequence of scraping websites for links every
 // interval (defined by tc) with the provided config. Sends any errors
-// to channel ec.
-func StartLoop(tc <-chan time.Time, ec chan error, c *userconfig.Meta) {
+// to channel ec. Send a struct{} to sc to stop the scraper.
+func StartLoop(tc <-chan time.Time, ec chan error, sc chan struct{}, c *userconfig.Meta) {
 
 	// The first email will be sent after the scrape interval
+	// TODO: This should send the first email immediately instead.
 	if !c.Scraping.OneOff {
 		<-tc
 	}
@@ -156,9 +157,12 @@ func StartLoop(tc <-chan time.Time, ec chan error, c *userconfig.Meta) {
 
 	// enter the main scraping/email sending loop
 	for !c.Scraping.OneOff {
+		select {
+		case <-sc:
+			return
+		case <-tc:
 
-		<-tc
-
-		go Run(ec, c)
+			go Run(ec, c)
+		}
 	}
 }
