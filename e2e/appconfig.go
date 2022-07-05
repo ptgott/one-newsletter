@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -21,10 +22,14 @@ import (
 //
 // Fields are exported so we can use them in templates.
 type appConfigOptions struct {
+	// Required
 	SMTPServerAddress string
-	LinkSources       []mockLinksrcInfo
-	StorageDir        string
-	PollInterval      string
+	// Required
+	LinkSources []mockLinksrcInfo
+	// Required
+	StorageDir string
+	// Required
+	PollInterval string
 }
 
 // mockLinksrcInfo contains metadata about test HTTP servers so we can use it
@@ -34,7 +39,7 @@ type mockLinksrcInfo struct {
 	URL string
 	// Required
 	Name string
-	// Required
+	// Not required
 	MaxItems int
 	// Not required
 	LinkSelector string
@@ -48,9 +53,12 @@ type mockLinksrcInfo struct {
 }
 
 // createUserConfig creates a user configuration based on the provided
-// appConfigOptions. Only options within appConfigOptions are required. The
-// are populated automatically using defaults intended for e2e testing.
-func createUserConfig(path string, opts appConfigOptions) (userconfig.Meta, error) {
+// appConfigOptions. Non-required options are populated automatically using
+// defaults intended for e2e testing.
+func createUserConfig(opts appConfigOptions) (userconfig.Meta, error) {
+	if opts.LinkSources == nil || opts.SMTPServerAddress == "" || opts.PollInterval == "" || opts.StorageDir == "" {
+		return userconfig.Meta{}, errors.New("must supply all required fields in appConfigOptions")
+	}
 	v, err := time.ParseDuration(opts.PollInterval)
 	if err != nil {
 		return userconfig.Meta{}, err
@@ -72,6 +80,9 @@ func createUserConfig(path string, opts appConfigOptions) (userconfig.Meta, erro
 
 	config.LinkSources = make([]linksrc.Config, len(opts.LinkSources))
 	for i, ls := range opts.LinkSources {
+		if ls.URL == "" || ls.Name == "" {
+			return userconfig.Meta{}, errors.New("each mockLinksrcInfo must include a URL and Name")
+		}
 		u, err := url.Parse(ls.URL)
 		if err != nil {
 			return userconfig.Meta{}, err
