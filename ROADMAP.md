@@ -8,19 +8,28 @@
 
 ### Within this: now
 
-- Rewrite e2e tests to use a single process. 
+Implementing the in-process e2e tests with `TestNewsletterEmailSending` in
+`e2e_test.go`.
 
-  **First**, edit `scrape.StartLoop` to include a parameter for a channel we can
-  use to stop the goroutine. Left a TODO for this in
-  `TestNewsletterEmailSending`. This will replace the use of
-  `cmd.Process.Signal`. **Implemented this** but need to incorporate it into the
-  first `scrape.StartLoop` call we're adding to the e2e tests (in
-  `TEstNewsletterEmailSending`).
+Getting an error where main loop can't connect to the SMTP server:
+
+```json
+{"level":"fatal","error":"dial tcp: address localhost:2526:: too many colons in
+address","time":"2022-07-06T09:07:08-04:00","message":"cannot connect to the
+remote SMTP server"}
+```
+
+The result of `testenv.SMTPServer.Address()` is a valid `localhost` address.
+
+However, the config's `EmailSettings` are invalid, showing a blank
+`SMTPServerPort` and an `SMTPServerHost` of `localhost:2526`.
+
+### Within this: next
+- Rewrite e2e tests to use a single process. 
 
   `exec.Command` calls to replace:
 
   - **e2e/e2e_test.go:34** build the app in `TestMain`
-  - **e2e/e2e_test.go:98** run One Newsletter
   - **e2e/e2e_test.go:200** run One Newsletter
   - **e2e/e2e_test.go:330** run One Newsletter
   - **e2e/e2e_test.go:453** run One Newsletter
@@ -33,7 +42,6 @@
   We can then remove the first `exec.Command` call from `TestMain`. Also use the
   new `createUserConfig` function.
 
-### Within this: next
 
 - Rewrite e2e tests to use a single process:
 

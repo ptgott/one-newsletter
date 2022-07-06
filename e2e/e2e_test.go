@@ -96,25 +96,13 @@ func TestNewsletterEmailSending(t *testing.T) {
 
 	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
 	ec := make(chan error)
+	sc := make(chan struct{})
 
-	go scrape.StartLoop(tk, ec, config)
+	go scrape.StartLoop(tk.C, ec, sc, &config)
 
 	time.Sleep(time.Duration(stopIntervalS) * time.Second)
 
-	// TODO: Find a way to interrupt the scraper
-	err = cmd.Process.Signal(os.Interrupt)
-
-	// At this point you need to find the process and kill it manually.
-	// This messes up the test, so we panic.
-	if err != nil {
-		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
-	}
-
-	// it's okay for the application to exit with an error--we want to proceed
-	// with the test suite so we can get visibility into those errors
-	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
-		t.Fatalf("couldn't stop the application process: %v", err)
-	}
+	sc <- struct{}{}
 
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 

@@ -87,7 +87,7 @@ func main() {
 	errCh := make(chan error) // errors to print
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
-	go scrape.StartLoop(scrapeCadence.C, errCh, config)
+	go scrape.StartLoop(scrapeCadence.C, errCh, nil, config)
 
 	// At this point, the main goroutine blocks until there's an error
 	for {
