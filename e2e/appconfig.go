@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/andybalholm/cascadia"
@@ -22,7 +23,7 @@ import (
 //
 // Fields are exported so we can use them in templates.
 type appConfigOptions struct {
-	// Required
+	// Required. Includes host and port.
 	SMTPServerAddress string
 	// Required
 	LinkSources []mockLinksrcInfo
@@ -63,9 +64,17 @@ func createUserConfig(opts appConfigOptions) (userconfig.Meta, error) {
 	if err != nil {
 		return userconfig.Meta{}, err
 	}
+
+	hp := strings.Split(opts.SMTPServerAddress, ":")
+
+	if len(hp) != 2 {
+		return userconfig.Meta{}, errors.New("SMTPServerAddress must be in the form host:port")
+	}
+
 	config := userconfig.Meta{
 		EmailSettings: email.UserConfig{
-			SMTPServerHost:       opts.SMTPServerAddress,
+			SMTPServerHost:       hp[0],
+			SMTPServerPort:       hp[1],
 			FromAddress:          "mynewsletter@example.com",
 			ToAddress:            "recipient@example.com",
 			UserName:             "myuser",
