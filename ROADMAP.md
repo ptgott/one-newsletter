@@ -8,22 +8,21 @@
 
 ### Within this: now
 
-- Rewrite e2e tests to use a single process. 
+- Rewrite `TestNoEmailFlag` to use a single process based on `createUserConfig`
+    and `scrape.StartLoop`. The tricky thing with this test is that it copies
+    stdout to a `bytes.Buffer` to assert against the email text. See how to do
+    this without working with a `cmd.Stdout`.
 
-  `exec.Command` calls to replace:
+- Other  `exec.Command` calls to replace:
 
-  - **e2e/e2e_test.go:34** build the app in `TestMain`
-  - **e2e/e2e_test.go:200** run One Newsletter
-  - **e2e/e2e_test.go:330** run One Newsletter
-  - **e2e/e2e_test.go:453** run One Newsletter
-  - **e2e/e2e_test.go:562** run One Newsletter
-  - **e2e/e2e_test.go:649** run One Newsletter
-  - **e2e/e2e_test.go:749** run One Newsletter
-  - **e2e/e2e_test.go:834** run One Newsletter
+  - `TestOneOffFlag`
+  - `TestOneOffFlagWithNoEmailFlag`
 
-  Instead of these calls, we should call `scrape.StartLoop` with a particular config. 
+  In these tests, we should call `scrape.StartLoop` with a particular config. 
   We can then remove the first `exec.Command` call from `TestMain`. Also use the
   new `createUserConfig` function.
+
+- Remove the `go build` call from `TestMain`.
 
 ### Within this: next
 
@@ -32,6 +31,10 @@
    tests, and don't need to wait as much. Changing our e2e tests to run
    in-process doesn't actually save much time, so we can make some real gains by
    using a mock clock.
+
+2. The longest test by far is `TestDBCleanup`, which takes nearly a minute to
+   run! After implementing the mock clock, let's see if there's another way to
+   reduce the time it takes to run this.
 
 ## Helping One Newsletter fetch links from all news sites
 
