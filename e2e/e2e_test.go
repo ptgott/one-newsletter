@@ -95,14 +95,18 @@ func TestNewsletterEmailSending(t *testing.T) {
 	}
 
 	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
-	ec := make(chan error)
-	sc := make(chan struct{})
 
-	go scrape.StartLoop(tk.C, ec, sc, &config)
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
+	}
+
+	go scrape.StartLoop(scrapeConfig, &config)
 
 	time.Sleep(time.Duration(stopIntervalS) * time.Second)
 
-	sc <- struct{}{} // stop the scraper
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 
@@ -177,10 +181,13 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	}
 
 	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
-	ec := make(chan error)
-	sc := make(chan struct{})
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
+	}
 
-	go scrape.StartLoop(tk.C, ec, sc, &config)
+	go scrape.StartLoop(scrapeConfig, &config)
 
 	// Run the application from the entrypoint with our new config
 
@@ -203,7 +210,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	log.Info().Msg("finished updating the mock link sites")
 	time.Sleep(time.Duration(stopIntervalS-updateIntervalS) * time.Second)
 
-	sc <- struct{}{} // stop the scraper
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em2, err := testenv.SMTPServer.RetrieveEmails(ut)
 	if err != nil {
@@ -290,10 +297,13 @@ func TestMaxLinkLimits(t *testing.T) {
 	}
 
 	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
-	ec := make(chan error)
-	sc := make(chan struct{})
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
+	}
 
-	go scrape.StartLoop(tk.C, ec, sc, &config)
+	go scrape.StartLoop(scrapeConfig, &config)
 
 	// Run the application from the entrypoint with our new config
 
@@ -302,7 +312,7 @@ func TestMaxLinkLimits(t *testing.T) {
 	// for emails again.
 	time.Sleep(time.Duration(stopIntervalS) * time.Second)
 
-	sc <- struct{}{} // stop the scraper
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
@@ -397,10 +407,13 @@ func TestDBCleanup(t *testing.T) {
 	}
 
 	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
-	ec := make(chan error)
-	sc := make(chan struct{})
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
+	}
 
-	go scrape.StartLoop(tk.C, ec, sc, &config)
+	go scrape.StartLoop(scrapeConfig, &config)
 
 	fileSizes := make([]float64, pollCycles, pollCycles)
 	for i := range fileSizes {
@@ -409,7 +422,7 @@ func TestDBCleanup(t *testing.T) {
 		testenv.update(linksPerPub)
 	}
 
-	sc <- struct{}{} // stop the scraper
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	// The test assertion is based on the standard deviation of the file sizes,
 	// since this is in the same unit as the file size (bytes).
@@ -486,13 +499,18 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 	}
 
 	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
-	ec := make(chan error)
-	sc := make(chan struct{})
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
+	}
 
-	go scrape.StartLoop(tk.C, ec, sc, &config)
+	go scrape.StartLoop(scrapeConfig, &config)
 
 	// Wait for the application to poll the link site and check for emails
 	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {

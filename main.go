@@ -83,21 +83,24 @@ func main() {
 		)
 	}
 
-	// Declare channels between the main goroutine and the scrapers
-	errCh := make(chan error) // errors to print
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 
-	go scrape.StartLoop(scrapeCadence.C, errCh, nil, config)
+	scrapeConfig := scrape.Config{
+		TickCh:   scrapeCadence.C,
+		ErrCh:    make(chan error),  // errors to print
+		OutputCh: make(chan string), // messages to print to stdout
+		StopCh:   nil,               // since we simply exit on a SIGINT
+	}
+
+	go scrape.StartLoop(scrapeConfig, config)
 
 	// At this point, the main goroutine blocks until there's an error
-	for {
-		err, ok := <-errCh
-		// There's no need for the error channel anymore, so we stop
-		// looping and let the rest of the program complete.
-		if !ok {
-			break
-		} else {
-			log.Error().Err(err).Msg("error gathering links to email")
-		}
+	// or a message to print
+	select {
+	case <-scrapeConfig.ErrCh:
+		log.Error().Err(err).Msg("error gathering links to email")
+	case msg := <-scrapeConfig.OutputCh:
+		os.Stdout.Write([]byte(msg))
+
 	}
 }

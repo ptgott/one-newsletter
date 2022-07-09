@@ -9,9 +9,8 @@
 ### Within this: now
 
 - Rewrite `TestNoEmailFlag` to use a single process based on `createUserConfig`
-    and `scrape.StartLoop`. The tricky thing with this test is that it copies
-    stdout to a `bytes.Buffer` to assert against the email text. See how to do
-    this without working with a `cmd.Stdout`.
+    and `scrape.StartLoop`. Use the `scrape.Config.OutputCh` to receive the
+    stdout message to make assertions against.
 
 - Other  `exec.Command` calls to replace:
 
