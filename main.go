@@ -87,20 +87,17 @@ func main() {
 
 	scrapeConfig := scrape.Config{
 		TickCh:   scrapeCadence.C,
-		ErrCh:    make(chan error),  // errors to print
-		OutputCh: make(chan string), // messages to print to stdout
-		StopCh:   nil,               // since we simply exit on a SIGINT
+		ErrCh:    make(chan error), // errors to print
+		OutputWr: os.Stdout,        // write to stdout if the -no-email flag is given
+		StopCh:   nil,              // since we simply exit on a SIGINT
 	}
 
-	go scrape.StartLoop(scrapeConfig, config)
+	go scrape.StartLoop(&scrapeConfig, config)
 
 	// At this point, the main goroutine blocks until there's an error
-	// or a message to print
-	select {
-	case <-scrapeConfig.ErrCh:
+	for {
+		err := <-scrapeConfig.ErrCh
 		log.Error().Err(err).Msg("error gathering links to email")
-	case msg := <-scrapeConfig.OutputCh:
-		os.Stdout.Write([]byte(msg))
-
 	}
+
 }

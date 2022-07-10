@@ -8,10 +8,6 @@
 
 ### Within this: now
 
-- Rewrite `TestNoEmailFlag` to use a single process based on `createUserConfig`
-    and `scrape.StartLoop`. Use the `scrape.Config.OutputCh` to receive the
-    stdout message to make assertions against.
-
 - Other  `exec.Command` calls to replace:
 
   - `TestOneOffFlag`

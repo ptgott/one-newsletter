@@ -1,6 +1,7 @@
 package scrape
 
 import (
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -19,17 +20,17 @@ type Config struct {
 	ErrCh chan error
 	// Channel for stopping the scraper
 	StopCh chan struct{}
-	// Channel for writing messages to display. The means of display
-	// is controlled by the caller. Intended for email text shown when the
-	// --noemail flag is used.
-	OutputCh chan string
+	// Writer for a message to display when a scrape has finished.The means
+	// of display is controlled by the caller. Intended for email text shown
+	// when the --noemail flag is used.
+	OutputWr io.Writer
 }
 
 // Run conducts a single scrape and email cycle, sending any errors to
 // the error channel ec. It reads the user config anew at the beginning of
 // each cycle. At the end of a scrape cycle, it sends an email or, depending
-// on the config, sendsa plaintext version of the email message to mc.
-func Run(ec chan error, mc chan string, config *userconfig.Meta) {
+// on the config, writes a plaintext version of the email message to outwr.
+func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
 
 	httpClient := http.Client{
 		// Determined arbitrarily. We don't want to wait forever for a
@@ -138,12 +139,15 @@ func Run(ec chan error, mc chan string, config *userconfig.Meta) {
 	log.Info().Msg("attempting to send an email")
 
 	if config.Scraping.NoEmail {
-		select {
-		case mc <- bod:
-		default:
+		if outwr == nil {
 			log.Warn().Msg(
-				"a message channel is unavailable for receiving the output message",
+				"a writer is unavailable for receiving the output message",
 			)
+
+		} else {
+			if _, err := outwr.Write([]byte(bod)); err != nil {
+				log.Error().Err(err).Msg("cannot write the message output")
+			}
 		}
 	} else {
 		err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
@@ -163,7 +167,7 @@ func Run(ec chan error, mc chan string, config *userconfig.Meta) {
 // StartLoop begins the main sequence of scraping websites for links every
 // interval (defined by tc) with the provided config. Sends any errors
 // to channel ec. Send a struct{} to sc to stop the scraper.
-func StartLoop(s Config, c *userconfig.Meta) {
+func StartLoop(s *Config, c *userconfig.Meta) {
 
 	// The first email will be sent after the scrape interval
 	// TODO: This should send the first email immediately instead.
@@ -172,7 +176,7 @@ func StartLoop(s Config, c *userconfig.Meta) {
 	}
 
 	// Run the first scrape immediately
-	Run(s.ErrCh, s.OutputCh, c)
+	Run(s.ErrCh, s.OutputWr, c)
 
 	// enter the main scraping/email sending loop
 	for !c.Scraping.OneOff {
@@ -181,7 +185,7 @@ func StartLoop(s Config, c *userconfig.Meta) {
 			return
 		case <-s.TickCh:
 
-			go Run(s.ErrCh, s.OutputCh, c)
+			go Run(s.ErrCh, s.OutputWr, c)
 		}
 	}
 }
