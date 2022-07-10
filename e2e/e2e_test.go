@@ -638,35 +638,30 @@ func TestOneOffFlag(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			OneOff:            true,
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-		"-oneoff",
-	)
-
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
+	scrapeConfig := scrape.Config{
+		TickCh: nil, // since we're using a one-off configuration
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
+	}
 
 	dbBefore := totalBadgerDataFileSize(testenv.tempDirPath)
 
-	// The -oneoff flag should cause the command to become a discrete job
-	if err = cmd.Run(); err != nil {
-		t.Fatalf("couldn't run the app: %v", err)
-	}
+	// The -oneoff flag should cause the scraper loop to run as a one-off
+	// job
+	scrape.StartLoop(&scrapeConfig, &config)
 
 	dbAfter := totalBadgerDataFileSize(testenv.tempDirPath)
 

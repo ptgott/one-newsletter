@@ -96,8 +96,14 @@ func main() {
 
 	// At this point, the main goroutine blocks until there's an error
 	for {
-		err := <-scrapeConfig.ErrCh
-		log.Error().Err(err).Msg("error gathering links to email")
+		err, ok := <-scrapeConfig.ErrCh
+		// There's no need for the error channel anymore, so we stop
+		// looping and let the rest of the program complete.
+		if !ok {
+			break
+		} else {
+			log.Error().Err(err).Msg("error gathering links to email")
+		}
 	}
 
 }
