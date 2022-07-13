@@ -17,6 +17,17 @@
   We can then remove the first `exec.Command` call from `TestMain`. Also use the
   new `createUserConfig` function.
 
+  When running `TestOneOffFlag`, the test outputs a ton of `unable to write to
+  the no-op database` errors, which happen when the code calls `*NoOpDB.Put`.
+  The test also prints the full body of the email, which is unexpected.
+
+  Note that we're also seeing failures from `TestNewsletterEmailSending`:
+  `expecting 2 emails but got 0`.
+
+  <!--TODO NEXT: debug TestOneOffFlag to see if we're entering the `if
+  config.Scraping.NoEmail` block in scrape.StartLoop` unexpectedly. This seems
+  to be the only way the code would print the email body to stdout. -->
+
 - Remove the `go build` call from `TestMain`.
 
 ### Within this: next
