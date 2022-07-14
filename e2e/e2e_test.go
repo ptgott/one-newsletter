@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/url"
 	"os"
 	"os/exec"
@@ -23,30 +22,30 @@ var (
 	appPath string // filled in later--path to the built application
 )
 
-func TestMain(m *testing.M) {
-	// We need to build the application before we can run it. While
-	// executing "go run" in the test environment seems like a nice
-	// cross-platform choice, the main "go run" process isn't actually what
-	// executes the program. This means that when the test environment
-	// terminates the "go run" process, it leaves an orphan process that
-	// can't be managed by the test environment.
-	rand.Seed(time.Now().UnixNano())
-	appPath = fmt.Sprintf("./app%v", rand.Intn(1000))
-	bld := exec.Command("go", "build", "-o", appPath, "../main.go")
-	err := bld.Run()
-	if err != nil {
-		panic(fmt.Sprintf("can't build the application: %v", err))
-	}
-
-	err = os.Chmod(appPath, 0777)
-	if err != nil {
-		panic(fmt.Sprintf("can't change the application permissions"))
-	}
-
-	s := m.Run()
-	os.Remove(appPath)
-	os.Exit(s)
-}
+// func TestMain(m *testing.M) {
+// 	// We need to build the application before we can run it. While
+// 	// executing "go run" in the test environment seems like a nice
+// 	// cross-platform choice, the main "go run" process isn't actually what
+// 	// executes the program. This means that when the test environment
+// 	// terminates the "go run" process, it leaves an orphan process that
+// 	// can't be managed by the test environment.
+// 	rand.Seed(time.Now().UnixNano())
+// 	appPath = fmt.Sprintf("./app%v", rand.Intn(1000))
+// 	bld := exec.Command("go", "build", "-o", appPath, "../main.go")
+// 	err := bld.Run()
+// 	if err != nil {
+// 		panic(fmt.Sprintf("can't build the application: %v", err))
+// 	}
+//
+// 	err = os.Chmod(appPath, 0777)
+// 	if err != nil {
+// 		panic(fmt.Sprintf("can't change the application permissions"))
+// 	}
+//
+// 	s := m.Run()
+// 	os.Remove(appPath)
+// 	os.Exit(s)
+// }
 
 // Check that the number of emails sent is within the expected range.
 // Declare a test environment with a number of fake e-publications, run the

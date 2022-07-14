@@ -24,9 +24,27 @@
   Note that we're also seeing failures from `TestNewsletterEmailSending`:
   `expecting 2 emails but got 0`.
 
-  <!--TODO NEXT: debug TestOneOffFlag to see if we're entering the `if
-  config.Scraping.NoEmail` block in scrape.StartLoop` unexpectedly. This seems
-  to be the only way the code would print the email body to stdout. -->
+  What's weird is that, when stepping through `TestOneOffFlag` with `dlv`, we
+  don't print the HTML version of the email to stdout until the final line of
+  `TestOneOffFlag` has been executed--it could be that there's something in
+  `TestMain` that's responsible!
+
+  It turns out that there's another test, `TestOneOffFlagWithNoEmailFlag`, that
+  was also being run, because the `go test` command used included a `run` flag
+  that was only assigned to `TestOneOffFlag`.
+
+  Note that the db in `TestOneOffFlag` is indeed a `BadgerDB`, not a `NoOPDB`.
+  This is because `SetUpDB` uses the filepath to determine whether to return a
+  `NoOpDB` or not. Let's change it to use a `userconfig.Meta` instead.
+
+  **Issue with this:** there's an import cycle! 
+
+  <!--TODO:
+
+  - Break Scraping out of userconfig and into its own package
+  - Update all calls to SetUpDB
+
+  -->
 
 - Remove the `go build` call from `TestMain`.
 
