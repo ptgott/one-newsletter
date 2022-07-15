@@ -33,18 +33,16 @@
   was also being run, because the `go test` command used included a `run` flag
   that was only assigned to `TestOneOffFlag`.
 
-  Note that the db in `TestOneOffFlag` is indeed a `BadgerDB`, not a `NoOPDB`.
-  This is because `SetUpDB` uses the filepath to determine whether to return a
-  `NoOpDB` or not. Let's change it to use a `userconfig.Meta` instead.
+  Note that the db in `TestOneOffFlag` is indeed a `BadgerDB`, not a `NoOPDB` as
+  expected.  This is because `SetUpDB` uses the filepath to determine whether to
+  return a `NoOpDB` or not. Let's change it to use a `userconfig.Meta` instead.
 
   **Issue with this:** there's an import cycle! 
+  - Moving `Scraping` from `userconfig` to `scrape` doesn't work, since `scrape`
+      imports `userconfig` for the `Meta` param in `Run` and `userconfig.Meta`
+      includes a `scrape.Scraping`--another import cycle.
 
-  <!--TODO:
-
-  - Break Scraping out of userconfig and into its own package
-  - Update all calls to SetUpDB
-
-  -->
+  - **TODO:** Plan out the import graph carefully to iron out any wrinkles.
 
 - Remove the `go build` call from `TestMain`.
 
