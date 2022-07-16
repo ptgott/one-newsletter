@@ -8,15 +8,13 @@
 
 ### Within this: now
 
-- Run the e2e tests with a timeout and see where they're hanging.
-
-### Within this: next
-
 1. Use a mock clock in e2e tests when calling `scrape.StartLoop` with a
    `time.Ticker` channel. This way, we can advance the clock manually to run
    tests, and don't need to wait as much. Changing our e2e tests to run
    in-process doesn't actually save much time, so we can make some real gains by
    using a mock clock.
+
+### Within this: next
 
 2. The longest test by far is `TestDBCleanup`, which takes nearly a minute to
    run! After implementing the mock clock, let's see if there's another way to

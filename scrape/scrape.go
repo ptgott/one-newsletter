@@ -26,11 +26,11 @@ type Config struct {
 	OutputWr io.Writer
 }
 
-// Run conducts a single scrape and email cycle, sending any errors to
-// the error channel ec. It reads the user config anew at the beginning of
-// each cycle. At the end of a scrape cycle, it sends an email or, depending
-// on the config, writes a plaintext version of the email message to outwr.
-func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
+// Run conducts a single scrape and email cycle and returns the first error
+// encountered. It reads the user config anew at the beginning of each cycle. At
+// the end of a scrape cycle, it sends an email or, depending on the config,
+// writes a plaintext version of the email message to outwr.
+func Run(outwr io.Writer, config *userconfig.Meta) error {
 
 	httpClient := http.Client{
 		// Determined arbitrarily. We don't want to wait forever for a
@@ -54,8 +54,9 @@ func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
 			// collected links.
 			time.Duration(2)*config.Scraping.Interval,
 		)
-
-		ec <- err
+		if err != nil {
+			return err
+		}
 	}
 
 	log.Info().Msg("set up the database connection successfully")
@@ -69,6 +70,7 @@ func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
 	// with the previous scrape and build an email body
 	emailBuildCh := make(chan linksrc.Set, len(config.LinkSources))
 	wg.Add(len(config.LinkSources))
+	var ec chan error
 	for _, ls := range config.LinkSources {
 		go func(
 			lc linksrc.Config,
@@ -93,6 +95,13 @@ func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
 		}(ls, &wg, emailBuildCh, ec)
 	}
 	wg.Wait()
+
+	// Return the first error sent to the channel
+	select {
+	case err := <-ec:
+		return err
+	default:
+	}
 	// TODO: Having the receiver close the channel is not how close()
 	// was intended to be used, but senders have no way of knowing
 	// when to close the channel, and we need to use close() in order
@@ -166,15 +175,15 @@ func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
 
 	// We're only doing this once, so get out of the main loop
 	if config.Scraping.OneOff {
-		close(ec)
-		return
+		return nil
 	}
+	return nil
 
 }
 
 // StartLoop begins the main sequence of scraping websites for links every
-// interval (defined by tc) with the provided config. Sends any errors
-// to channel ec. Send a struct{} to sc to stop the scraper.
+// interval (defined by tc) with the provided config. If an s.ErrCh is provided,
+// sends any errors to it. Send a struct{} to sc to stop the scraper.
 func StartLoop(s *Config, c *userconfig.Meta) {
 
 	// The first email will be sent after the scrape interval
@@ -184,7 +193,16 @@ func StartLoop(s *Config, c *userconfig.Meta) {
 	}
 
 	// Run the first scrape immediately
-	Run(s.ErrCh, s.OutputWr, c)
+	err := Run(s.OutputWr, c)
+	// Make a weak effort to send any errors encountered to the provided
+	// error channel. If there are no receivers,
+	if err != nil {
+		select {
+		case s.ErrCh <- err:
+		default:
+		}
+
+	}
 
 	// enter the main scraping/email sending loop
 	for !c.Scraping.OneOff {
@@ -192,8 +210,16 @@ func StartLoop(s *Config, c *userconfig.Meta) {
 		case <-s.StopCh:
 			return
 		case <-s.TickCh:
-
-			go Run(s.ErrCh, s.OutputWr, c)
+			go func(io.Writer, *Config) {
+				err := Run(s.OutputWr, c)
+				if err != nil {
+					select {
+					case s.ErrCh <- err:
+					default:
+					}
+				}
+			}(s.OutputWr, s)
 		}
+
 	}
 }
