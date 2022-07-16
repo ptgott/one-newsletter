@@ -4,8 +4,8 @@ import (
 	"flag"
 	"os"
 	"os/signal"
-	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/ptgott/one-newsletter/scrape"
 	"github.com/ptgott/one-newsletter/userconfig"
 
@@ -83,10 +83,11 @@ func main() {
 		)
 	}
 
-	scrapeCadence := time.NewTicker(config.Scraping.Interval)
+	cl := clockwork.NewRealClock()
+	scrapeCadence := cl.NewTicker(config.Scraping.Interval)
 
 	scrapeConfig := scrape.Config{
-		TickCh:   scrapeCadence.C,
+		Ticker:   scrapeCadence,
 		ErrCh:    make(chan error), // errors to print
 		OutputWr: os.Stdout,        // write to stdout if the -no-email flag is given
 		StopCh:   nil,              // since we simply exit on a SIGINT

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/ptgott/one-newsletter/scrape"
 	"github.com/ptgott/one-newsletter/smtptest"
 
@@ -66,18 +67,18 @@ func TestNewsletterEmailSending(t *testing.T) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
-
-	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	fc := clockwork.NewFakeClock()
+	tk := fc.NewTicker(time.Second * time.Duration(pollIntervalS))
 
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
+		Ticker: tk,
 		ErrCh:  make(chan error),
 		StopCh: make(chan struct{}),
 	}
 
 	go scrape.StartLoop(&scrapeConfig, &config)
 
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	fc.Advance(time.Duration(stopIntervalS) * time.Second)
 
 	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
@@ -153,9 +154,10 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	fc := clockwork.NewFakeClock()
+	tk := fc.NewTicker(time.Second * time.Duration(pollIntervalS))
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
+		Ticker: tk,
 		ErrCh:  make(chan error),
 		StopCh: make(chan struct{}),
 	}
@@ -167,7 +169,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	// Wait for the application to poll the link site, check for emails,
 	// update the application, wait another poll interval, and check
 	// for emails again.
-	time.Sleep(time.Duration(updateIntervalS) * time.Second)
+	fc.Advance(time.Duration(updateIntervalS) * time.Second)
 	em1, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
 		t.Errorf("could not retrieve emails before the update: %v", err)
@@ -181,7 +183,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	testenv.update(linksToUpdate)
 	ut := time.Now().UnixNano()
 	log.Info().Msg("finished updating the mock link sites")
-	time.Sleep(time.Duration(stopIntervalS-updateIntervalS) * time.Second)
+	fc.Advance(time.Duration(stopIntervalS-updateIntervalS) * time.Second)
 
 	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
@@ -269,9 +271,10 @@ func TestMaxLinkLimits(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	fc := clockwork.NewFakeClock()
+	tk := fc.NewTicker(time.Second * time.Duration(pollIntervalS))
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
+		Ticker: tk,
 		ErrCh:  make(chan error),
 		StopCh: make(chan struct{}),
 	}
@@ -283,7 +286,7 @@ func TestMaxLinkLimits(t *testing.T) {
 	// Wait for the application to poll the link site, check for emails,
 	// update the application, wait another poll interval, and check
 	// for emails again.
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	fc.Advance(time.Duration(stopIntervalS) * time.Second)
 
 	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
@@ -379,9 +382,10 @@ func TestDBCleanup(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	fc := clockwork.NewFakeClock()
+	tk := fc.NewTicker(time.Second * time.Duration(pollIntervalS))
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
+		Ticker: tk,
 		ErrCh:  make(chan error),
 		StopCh: make(chan struct{}),
 	}
@@ -390,7 +394,7 @@ func TestDBCleanup(t *testing.T) {
 
 	fileSizes := make([]float64, pollCycles, pollCycles)
 	for i := range fileSizes {
-		time.Sleep(time.Duration(diskCheckIntervalMS) * time.Millisecond)
+		fc.Advance(time.Duration(diskCheckIntervalMS) * time.Millisecond)
 		fileSizes[i] = totalBadgerDataFileSize(testenv.tempDirPath)
 		testenv.update(linksPerPub)
 	}
@@ -471,9 +475,10 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	fc := clockwork.NewFakeClock()
+	tk := fc.NewTicker(time.Second * time.Duration(pollIntervalS))
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
+		Ticker: tk,
 		ErrCh:  make(chan error),
 		StopCh: make(chan struct{}),
 	}
@@ -481,7 +486,7 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 	go scrape.StartLoop(&scrapeConfig, &config)
 
 	// Wait for the application to poll the link site and check for emails
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	fc.Advance(time.Duration(stopIntervalS) * time.Second)
 
 	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
@@ -544,11 +549,12 @@ func TestNoEmailFlag(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	fc := clockwork.NewFakeClock()
+	tk := fc.NewTicker(time.Second * time.Duration(pollIntervalS))
 	var msg bytes.Buffer
 
 	scrapeConfig := scrape.Config{
-		TickCh:   tk.C,
+		Ticker:   tk,
 		ErrCh:    make(chan error),
 		StopCh:   make(chan struct{}),
 		OutputWr: &msg,
@@ -556,7 +562,7 @@ func TestNoEmailFlag(t *testing.T) {
 
 	go scrape.StartLoop(&scrapeConfig, &config)
 
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	fc.Advance(time.Duration(stopIntervalS) * time.Second)
 	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em1, err := testenv.SMTPServer.RetrieveEmails(0)
@@ -625,7 +631,7 @@ func TestOneOffFlag(t *testing.T) {
 	}
 
 	scrapeConfig := scrape.Config{
-		TickCh: nil, // since we're using a one-off configuration
+		Ticker: nil, // since we're using a one-off configuration
 		ErrCh:  make(chan error),
 		StopCh: make(chan struct{}),
 	}
@@ -707,7 +713,7 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 
 	var msg bytes.Buffer
 	scrapeConfig := scrape.Config{
-		TickCh:   nil, // since we're using a one-off configuration
+		Ticker:   nil, // since we're using a one-off configuration
 		ErrCh:    make(chan error),
 		StopCh:   make(chan struct{}),
 		OutputWr: &msg,

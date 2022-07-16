@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/ptgott/one-newsletter/html"
 	"github.com/ptgott/one-newsletter/linksrc"
 	"github.com/ptgott/one-newsletter/storage"
@@ -14,8 +15,8 @@ import (
 )
 
 type Config struct {
-	// For time.Ticker ticks
-	TickCh <-chan time.Time
+	// A scrape will run every tick of the Ticker
+	Ticker clockwork.Ticker
 	// Channel to send errors to
 	ErrCh chan error
 	// Channel for stopping the scraper
@@ -189,7 +190,7 @@ func StartLoop(s *Config, c *userconfig.Meta) {
 	// The first email will be sent after the scrape interval
 	// TODO: This should send the first email immediately instead.
 	if !c.Scraping.OneOff {
-		<-s.TickCh
+		<-s.Ticker.Chan()
 	}
 
 	// Run the first scrape immediately
@@ -209,7 +210,7 @@ func StartLoop(s *Config, c *userconfig.Meta) {
 		select {
 		case <-s.StopCh:
 			return
-		case <-s.TickCh:
+		case <-s.Ticker.Chan():
 			go func(io.Writer, *Config) {
 				err := Run(s.OutputWr, c)
 				if err != nil {

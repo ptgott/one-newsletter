@@ -4,21 +4,22 @@
 
 1. Run e2e tests in a separate goroutine rather than a child process. 
 
-  Use a minimal main.go file and extract most of the `main` function to a package that we can import in tests.
+  Use a minimal main.go file and extract most of the `main` function to a
+  package that we can import in tests.
 
 ### Within this: now
 
-1. Use a mock clock in e2e tests when calling `scrape.StartLoop` with a
-   `time.Ticker` channel. This way, we can advance the clock manually to run
-   tests, and don't need to wait as much. Changing our e2e tests to run
-   in-process doesn't actually save much time, so we can make some real gains by
-   using a mock clock.
+Get e2e tests to pass after adding `clockwork.NewFakeClock`:
+
+- `TestNewsletterEmailSending`
+- `TestNewsletterEmailUpdates`
+
+Both tests report fewer emails than expected, so it might be that advancing the
+fake clock is stopping some goroutine before it can complete its work.
 
 ### Within this: next
 
-2. The longest test by far is `TestDBCleanup`, which takes nearly a minute to
-   run! After implementing the mock clock, let's see if there's another way to
-   reduce the time it takes to run this.
+- Run manual testing to make sure we haven't messed up main.go.
 
 ## Helping One Newsletter fetch links from all news sites
 
