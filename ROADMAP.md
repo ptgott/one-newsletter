@@ -8,15 +8,7 @@
 
 ### Within this: now
 
-- Other  `exec.Command` calls to replace:
-
-  - `TestOneOffFlagWithNoEmailFlag`
-
-  In these tests, we should call `scrape.StartLoop` with a particular config. 
-  We can then remove the first `exec.Command` call from `TestMain`. Also use the
-  new `createUserConfig` function.
-
-- Remove the `go build` call from `TestMain`.
+- Run the e2e tests with a timeout and see where they're hanging.
 
 ### Within this: next
 

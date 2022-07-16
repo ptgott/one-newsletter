@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -21,31 +20,6 @@ import (
 var (
 	appPath string // filled in later--path to the built application
 )
-
-// func TestMain(m *testing.M) {
-// 	// We need to build the application before we can run it. While
-// 	// executing "go run" in the test environment seems like a nice
-// 	// cross-platform choice, the main "go run" process isn't actually what
-// 	// executes the program. This means that when the test environment
-// 	// terminates the "go run" process, it leaves an orphan process that
-// 	// can't be managed by the test environment.
-// 	rand.Seed(time.Now().UnixNano())
-// 	appPath = fmt.Sprintf("./app%v", rand.Intn(1000))
-// 	bld := exec.Command("go", "build", "-o", appPath, "../main.go")
-// 	err := bld.Run()
-// 	if err != nil {
-// 		panic(fmt.Sprintf("can't build the application: %v", err))
-// 	}
-//
-// 	err = os.Chmod(appPath, 0777)
-// 	if err != nil {
-// 		panic(fmt.Sprintf("can't change the application permissions"))
-// 	}
-//
-// 	s := m.Run()
-// 	os.Remove(appPath)
-// 	os.Exit(s)
-// }
 
 // Check that the number of emails sent is within the expected range.
 // Declare a test environment with a number of fake e-publications, run the
@@ -717,36 +691,31 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			OneOff:            true,
+			NoEmail:           true,
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-		"-oneoff",
-		"-noemail",
-	)
-
-	cmd.Stderr = os.Stderr
-	// Capture stdout in a buffer so we can capture the results
-	var cmdOut bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &cmdOut)
-
-	// The -oneoff flag should cause the command to become a discrete job
-	if err = cmd.Run(); err != nil {
-		t.Fatalf("couldn't run the app: %v", err)
+	var msg bytes.Buffer
+	scrapeConfig := scrape.Config{
+		TickCh:   nil, // since we're using a one-off configuration
+		ErrCh:    make(chan error),
+		StopCh:   make(chan struct{}),
+		OutputWr: &msg,
 	}
+
+	// The -oneoff flag should cause the scraper loop to run as a one-off
+	// job
+	scrape.StartLoop(&scrapeConfig, &config)
 
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
@@ -756,7 +725,7 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 		t.Fatalf("expected to receive zero emails but got %v", ems)
 	}
 
-	o, err := io.ReadAll(&cmdOut)
+	o, err := io.ReadAll(&msg)
 	if err != nil {
 		t.Fatalf("could not read from the command output: %v", err)
 	}
