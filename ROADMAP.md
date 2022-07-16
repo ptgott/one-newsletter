@@ -10,39 +10,11 @@
 
 - Other  `exec.Command` calls to replace:
 
-  - `TestOneOffFlag`
   - `TestOneOffFlagWithNoEmailFlag`
 
   In these tests, we should call `scrape.StartLoop` with a particular config. 
   We can then remove the first `exec.Command` call from `TestMain`. Also use the
   new `createUserConfig` function.
-
-  When running `TestOneOffFlag`, the test outputs a ton of `unable to write to
-  the no-op database` errors, which happen when the code calls `*NoOpDB.Put`.
-  The test also prints the full body of the email, which is unexpected.
-
-  Note that we're also seeing failures from `TestNewsletterEmailSending`:
-  `expecting 2 emails but got 0`.
-
-  What's weird is that, when stepping through `TestOneOffFlag` with `dlv`, we
-  don't print the HTML version of the email to stdout until the final line of
-  `TestOneOffFlag` has been executed--it could be that there's something in
-  `TestMain` that's responsible!
-
-  It turns out that there's another test, `TestOneOffFlagWithNoEmailFlag`, that
-  was also being run, because the `go test` command used included a `run` flag
-  that was only assigned to `TestOneOffFlag`.
-
-  Note that the db in `TestOneOffFlag` is indeed a `BadgerDB`, not a `NoOPDB` as
-  expected.  This is because `SetUpDB` uses the filepath to determine whether to
-  return a `NoOpDB` or not. Let's change it to use a `userconfig.Meta` instead.
-
-  **Issue with this:** there's an import cycle! 
-  - Moving `Scraping` from `userconfig` to `scrape` doesn't work, since `scrape`
-      imports `userconfig` for the `Meta` param in `Run` and `userconfig.Meta`
-      includes a `scrape.Scraping`--another import cycle.
-
-  - **TODO:** Plan out the import graph carefully to iron out any wrinkles.
 
 - Remove the `go build` call from `TestMain`.
 

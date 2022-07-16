@@ -39,17 +39,25 @@ func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
 		Timeout: time.Duration(60) * time.Second,
 	}
 
-	// Create a new db instance per scrape so we can close
-	// the db after the scrapers are finished and ensure
-	// disk writes.
-	db, err := storage.SetUpDB(
-		config.Scraping.StorageDirPath,
-		config.Scraping.Interval,
-	)
+	var db storage.KeyValue
+	if config.Scraping.NoEmail || config.Scraping.OneOff {
+		db = &storage.NoOpDB{}
+	} else {
+		var err error
+		db, err = storage.NewBadgerDB(
+			config.Scraping.StorageDirPath,
+			// A key inserted at one polling
+			// interval expires two intervals
+			// later, meaning that the interval
+			// after a link is collected,
+			// we can still compare it to newly
+			// collected links.
+			time.Duration(2)*config.Scraping.Interval,
+		)
 
-	if err != nil {
-		log.Error().Err(err).Msg("unable to set up the database")
+		ec <- err
 	}
+
 	log.Info().Msg("set up the database connection successfully")
 	log.Info().
 		Int("count", len(config.LinkSources)).
@@ -121,7 +129,7 @@ func Run(ec chan error, outwr io.Writer, config *userconfig.Meta) {
 	}
 
 	// Get rid of old keys just before we close
-	err = db.Cleanup()
+	err := db.Cleanup()
 	if err != nil {
 		log.Error().Err(err).Msg("error cleaning up the database")
 	}
