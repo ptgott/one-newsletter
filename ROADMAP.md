@@ -17,6 +17,44 @@ Get e2e tests to pass after adding `clockwork.NewFakeClock`:
 Both tests report fewer emails than expected, so it might be that advancing the
 fake clock is stopping some goroutine before it can complete its work.
 
+Note that using two `fc.Advance` calls set to the poll interval rather than one
+set to the stop interval doesn't make a difference.
+
+What's also really interesting is that if we set a breakpoint at `StartLoop`, at
+the top of the `for !c.Scraping.OneOff` loop, we never actually get there--we
+call the first `Run` and return. However, if we set a breakpoint at the `if err
+!= nil` block, then step to the next statement, we _do_ get to the `for
+!c.Scraping.OneOff` block.
+
+What happens during `fc.Advance`? In
+`/Users/paulgottschling/go/pkg/mod/github.com/jonboulle/clockwork@v0.3.0/clockwork.go:19`, we range through `fc.sleepers`, which now is a slice with one element.
+
+Note that `*fakeClock.After`, which is called by `*fakeTicker.runTickThread`,
+adds an element to `sleepers`
+(https://github.com/jonboulle/clockwork/blob/fea84af180bdf2e460e5c526ec421768a469f6e2/clockwork.go#L100)
+
+**What's really interesting** is that if we add a breakpoint to the statement
+that sends a tick to the fake clock tick channel,
+`/Users/paulgottschling/go/pkg/mod/github.com/jonboulle/clockwork@v0.3.0/ticker.go:66`,
+a tick is only sent once!
+
+Note that `skipTicks` is accurately set to `2`. `next` is reassigned to a new
+channel in the `case <-next` block (via `next = ft.clock.After(remaining)`,
+which in this case should give it another element to receive. After this
+reassignment, `next` has a `qcount` of `0`, i.e., there's no data in the queue.
+(https://github.com/golang/go/blob/ca7c6ef33d9eca2dbc7eb46601a051dc7dc4e411/src/runtime/chan.go#L34).
+
+There's actually a GitHub issue related to this: https://github.com/jonboulle/clockwork/issues/30
+
+**Do next:** 
+- Since the issue is upstream, split the branch that runs all e2e tests in
+    process from the branch that uses `clockwork` and plan to resume adding
+    `clockwork` once the issue is complete. If we can fix `clockwork` issue #30,
+    we could at least add a fork as a vendored library since this doesn't change
+    very often.
+- Look into fixing this issue upstream. It will be an interesting
+    exercise. 
+
 ### Within this: next
 
 - Run manual testing to make sure we haven't messed up main.go.
