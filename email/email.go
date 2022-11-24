@@ -37,6 +37,43 @@ type UserConfig struct {
 	SkipCertVerification bool
 }
 
+// CheckAndSetDefaults validates s and either returns a copy of c with default
+// settings applied or returns an error due to an invalid configuration
+func (c *UserConfig) CheckAndSetDefaults() (UserConfig, error) {
+
+	uc := *c
+
+	if c.SkipCertVerification == true {
+		log.Warn().Msg(
+			"SKIPPING TLS CERTIFICATE VERIFICATION. THIS SHOULD BE A TEST ENVIRONMENT. YOU HAVE BEEN WARNED",
+		)
+	}
+
+	if c.SMTPServerHost == "" || c.SMTPServerPort == "" {
+		return UserConfig{}, errors.New("email config must include the host and port of an SMTP server")
+	}
+
+	if c.FromAddress == "" {
+		return UserConfig{}, errors.New("email config must include a \"from\" address for sending email")
+	}
+
+	if c.ToAddress == "" {
+		return UserConfig{}, errors.New("email config must include a \"to\" address for sending email")
+	}
+
+	if c.UserName == "" {
+		return UserConfig{}, errors.New(
+			"email config must include a username for the SMTP relay server or message transfer agent",
+		)
+	}
+
+	if c.Password == "" {
+		return UserConfig{}, errors.New("email config must include a password for the SMTP relay server or MTA")
+	}
+
+	return uc, nil
+}
+
 // UnmarshalYAML implements the yaml.Unmarshaler interface. Validation is
 // performed here.
 func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -52,14 +89,11 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	scv, _ := v["skipCertVerification"]
 	if scv == "true" {
 		uc.SkipCertVerification = true
-		log.Warn().Msg(
-			"SKIPPING TLS CERTIFICATE VERIFICATION. THIS SHOULD BE A TEST ENVIRONMENT. YOU HAVE BEEN WARNED",
-		)
 	}
 
 	ssa, ok := v["smtpServerAddress"]
 	if !ok {
-		return errors.New("email config must include the address of an SMTP server")
+		ssa = ""
 	}
 
 	// We allow users to omit the scheme, since smtpServerAddress is only for
@@ -74,35 +108,30 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return errors.New("the SMTP server address is not a valid URL: " + err.Error())
 	}
 
-	pr := u.Port()
-	if pr == "" {
-		return errors.New("the SMTP server address must include a port")
-	}
-
 	uc.SMTPServerHost = u.Hostname()
-	uc.SMTPServerPort = pr
+	uc.SMTPServerPort = u.Port()
 
 	fa, ok := v["fromAddress"]
 	if !ok {
-		return errors.New("email config must include a \"from\" adddress for sending email")
+		fa = ""
 	}
 	uc.FromAddress = fa
 
 	ta, ok := v["toAddress"]
 	if !ok {
-		return errors.New("email confic must include a \"to\" address for sending email")
+		ta = ""
 	}
 	uc.ToAddress = ta
 
 	un, ok := v["username"]
 	if !ok {
-		return errors.New("email config must include a username for the SMTP relay server or MTA")
+		un = ""
 	}
 	uc.UserName = un
 
 	pw, ok := v["password"]
 	if !ok {
-		return errors.New("email config must include a password for the SMTP relay server or MTA")
+		pw = ""
 	}
 	uc.Password = pw
 	return nil

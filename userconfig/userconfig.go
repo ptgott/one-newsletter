@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ptgott/one-newsletter/linksrc"
+	"github.com/rs/zerolog/log"
 
 	"github.com/ptgott/one-newsletter/email"
 
@@ -31,10 +32,38 @@ type Meta struct {
 type Scraping struct {
 	Interval       time.Duration
 	StorageDirPath string
+	// Run the scraper once, then exit
+	OneOff bool
+	// Print email text to stdout to help test configuration
+	NoEmail bool
 }
 
-// UnmarshalYAML implements yaml.Unmarshaler. It validates and parses
-// user config for general scraping behavior
+// CheckAndSetDefaults validates s and either returns a copy of s with default
+// settings applied or returns an error due to an invalid configuration
+func (s *Scraping) CheckAndSetDefaults() (Scraping, error) {
+
+	i := s.Interval.Milliseconds()
+	if i == 0 {
+		return Scraping{}, errors.New(
+			"user-provided config does not include a polling interval",
+		)
+	}
+
+	if i < minDurationMS {
+		minDurS := minDurationMS / 1000
+		return Scraping{}, fmt.Errorf("polling interval must be at least %v seconds", minDurS)
+	}
+	if s.StorageDirPath == "" {
+		return Scraping{}, errors.New(
+			"user-provided config does not include a storage path",
+		)
+	}
+
+	return *s, nil
+}
+
+// UnmarshalYAML parses a user-provided YAML configuration, returning any
+// parsing errors.
 func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	v := make(map[string]string)
 	err := unmarshal(&v)
@@ -46,9 +75,7 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	d, ok := v["interval"]
 
 	if !ok {
-		return errors.New(
-			"user-provided config does not include a polling interval",
-		)
+		d = "0s"
 	}
 
 	pd, err := time.ParseDuration(d)
@@ -60,27 +87,46 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		)
 	}
 
-	if pd.Milliseconds() == 0 {
-		return errors.New("polling interval must be greater than zero")
-	}
-
-	if pd.Milliseconds() < minDurationMS {
-		minDurS := minDurationMS / 1000
-		return fmt.Errorf("polling interval must be at least %v seconds", minDurS)
-	}
-
 	s.Interval = pd
 
 	sp, ok := v["storageDir"]
 	if !ok {
-		return errors.New(
-			"user-provided config does not include a storage path",
-		)
+		sp = ""
 	}
 
 	s.StorageDirPath = sp
 
 	return nil
+}
+
+// CheckAndSetDefaults validates m and either returns a copy of m with default
+// settings applied or returns an error due to an invalid configuration
+func (m *Meta) CheckAndSetDefaults() (Meta, error) {
+	c := Meta{}
+
+	s, err := m.Scraping.CheckAndSetDefaults()
+	if err != nil {
+		return Meta{}, err
+	}
+	c.Scraping = s
+
+	e, err := m.EmailSettings.CheckAndSetDefaults()
+	if err != nil {
+		return Meta{}, err
+	}
+	c.EmailSettings = e
+
+	c.LinkSources = make([]linksrc.Config, len(m.LinkSources))
+	for n, s := range m.LinkSources {
+		ns, err := s.CheckAndSetDefaults()
+		if err != nil {
+			return Meta{}, err
+		}
+		c.LinkSources[n] = ns
+	}
+
+	return c, nil
+
 }
 
 // Parse generates usable configurations from possibly arbitrary user input.
@@ -105,6 +151,15 @@ func Parse(r io.Reader) (*Meta, error) {
 
 	if len(m.LinkSources) == 0 {
 		return &Meta{}, errors.New("must include at least one item within \"link_sources\"")
+	}
+
+	// Since this is a one-off or a test, set the data directory to an
+	// empty string to disable database operations.
+	if m.Scraping.OneOff || m.Scraping.NoEmail {
+		m.Scraping.StorageDirPath = ""
+		log.Debug().Msg(
+			"disabling database operations",
+		)
 	}
 
 	return &m, nil

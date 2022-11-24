@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ptgott/one-newsletter/scrape"
 	"github.com/ptgott/one-newsletter/smtptest"
 
 	"github.com/rs/zerolog/log"
@@ -22,38 +21,13 @@ var (
 	appPath string // filled in later--path to the built application
 )
 
-func TestMain(m *testing.M) {
-	// We need to build the application before we can run it. While
-	// executing "go run" in the test environment seems like a nice
-	// cross-platform choice, the main "go run" process isn't actually what
-	// executes the program. This means that when the test environment
-	// terminates the "go run" process, it leaves an orphan process that
-	// can't be managed by the test environment.
-	rand.Seed(time.Now().UnixNano())
-	appPath = fmt.Sprintf("./app%v", rand.Intn(1000))
-	bld := exec.Command("go", "build", "-o", appPath, "../main.go")
-	err := bld.Run()
-	if err != nil {
-		panic(fmt.Sprintf("can't build the application: %v", err))
-	}
-
-	err = os.Chmod(appPath, 0777)
-	if err != nil {
-		panic(fmt.Sprintf("can't change the application permissions"))
-	}
-
-	s := m.Run()
-	os.Remove(appPath)
-	os.Exit(s)
-}
-
 // Check that the number of emails sent is within the expected range.
 // Declare a test environment with a number of fake e-publications, run the
 // application as a child process, wait for an interval, then stop the
 // subprocess to count emails sent.
 func TestNewsletterEmailSending(t *testing.T) {
-	stopIntervalS := 11
-	pollIntervalS := 5
+	stopIntervalMS := 1100
+	pollIntervalMS := 500
 	epubs := 3
 	linksPerPub := 5
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -81,47 +55,31 @@ func TestNewsletterEmailSending(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-	)
+	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
 
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	if err = cmd.Start(); err != nil {
-		t.Fatalf("couldn't start the app: %v", err)
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
 	}
 
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
+	go scrape.StartLoop(&scrapeConfig, &config)
 
-	err = cmd.Process.Signal(os.Interrupt)
+	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
 
-	// At this point you need to find the process and kill it manually.
-	// This messes up the test, so we panic.
-	if err != nil {
-		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
-	}
-
-	// it's okay for the application to exit with an error--we want to proceed
-	// with the test suite so we can get visibility into those errors
-	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
-		t.Fatalf("couldn't stop the application process: %v", err)
-	}
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 
@@ -134,7 +92,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 	// Integer division truncates toward zero, so we don't need to
 	// find the floor.
 	// https://golang.org/ref/spec#Integer_operators
-	expectedLen := stopIntervalS / pollIntervalS
+	expectedLen := stopIntervalMS / pollIntervalMS
 	if len(ems) != int(expectedLen) {
 		t.Errorf(
 			"expecting %v emails but got %v",
@@ -183,8 +141,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
@@ -196,18 +153,16 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-	)
-
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	if err = cmd.Start(); err != nil {
-		t.Fatalf("couldn't start the app: %v", err)
+	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
 	}
+
+	go scrape.StartLoop(&scrapeConfig, &config)
+
+	// Run the application from the entrypoint with our new config
 
 	// Wait for the application to poll the link site, check for emails,
 	// update the application, wait another poll interval, and check
@@ -227,19 +182,8 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	ut := time.Now().UnixNano()
 	log.Info().Msg("finished updating the mock link sites")
 	time.Sleep(time.Duration(stopIntervalS-updateIntervalS) * time.Second)
-	err = cmd.Process.Signal(os.Interrupt)
 
-	// At this point you need to find the process and kill it manually.
-	// This messes up the test, so we panic.
-	if err != nil {
-		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
-	}
-
-	// it's okay for the application to exit with an error--we want to proceed
-	// with the test suite so we can get visibility into those errors
-	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
-		t.Fatalf("couldn't stop the application process: %v", err)
-	}
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em2, err := testenv.SMTPServer.RetrieveEmails(ut)
 	if err != nil {
@@ -282,8 +226,8 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 }
 
 func TestMaxLinkLimits(t *testing.T) {
-	stopIntervalS := 7
-	pollIntervalS := 5
+	stopIntervalMS := 350
+	pollIntervalMS := 300
 	maxLinksInEmail := 5
 	epubs := 1
 	linksPerPub := 10
@@ -313,48 +257,35 @@ func TestMaxLinkLimits(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-	)
-
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	if err = cmd.Start(); err != nil {
-		t.Fatalf("couldn't start the app: %v", err)
+	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
 	}
+
+	go scrape.StartLoop(&scrapeConfig, &config)
+
+	// Run the application from the entrypoint with our new config
 
 	// Wait for the application to poll the link site, check for emails,
 	// update the application, wait another poll interval, and check
 	// for emails again.
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
-	err = cmd.Process.Signal(os.Interrupt)
-	// At this point you need to find the process and kill it manually.
-	// This messes up the test, so we panic.
-	if err != nil {
-		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
-	}
+	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
 
-	// it's okay for the application to exit with an error--we want to proceed
-	// with the test suite so we can get visibility into those errors
-	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
-		t.Fatalf("couldn't stop the application process: %v", err)
-	}
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
@@ -402,11 +333,11 @@ func totalBadgerDataFileSize(dirPath string) float64 {
 	return float64(size)
 }
 
-func TestDBcleanup(t *testing.T) {
-	pollIntervalS := 5
+func TestDBCleanup(t *testing.T) {
+	pollIntervalMS := 800
 	pollCycles := 10
 	// just a bit more than the pollInterval
-	diskCheckIntervalMS := 5100
+	diskCheckIntervalMS := 1000
 
 	epubs := 10
 	linksPerPub := 10
@@ -436,31 +367,26 @@ func TestDBcleanup(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-	)
-
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	if err = cmd.Start(); err != nil {
-		t.Fatalf("couldn't start the app: %v", err)
+	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
 	}
+
+	go scrape.StartLoop(&scrapeConfig, &config)
 
 	fileSizes := make([]float64, pollCycles, pollCycles)
 	for i := range fileSizes {
@@ -469,19 +395,7 @@ func TestDBcleanup(t *testing.T) {
 		testenv.update(linksPerPub)
 	}
 
-	err = cmd.Process.Signal(os.Interrupt)
-
-	// At this point you need to find the process and kill it manually.
-	// This messes up the test, so we panic.
-	if err != nil {
-		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
-	}
-
-	// it's okay for the application to exit with an error--we want to proceed
-	// with the test suite so we can get visibility into those errors
-	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
-		t.Fatalf("couldn't stop the application process: %v", err)
-	}
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	// The test assertion is based on the standard deviation of the file sizes,
 	// since this is in the same unit as the file size (bytes).
@@ -510,8 +424,8 @@ func TestDBcleanup(t *testing.T) {
 // invalid CSS. This test exists because one site with a config that included
 // an ambiguous selector seems to have caused the application to deadlock.
 func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
-	stopIntervalS := 8
-	pollIntervalS := 5
+	stopIntervalMS := 800
+	pollIntervalMS := 500
 	epubs := 1
 	linksPerPub := 10
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -545,46 +459,31 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-	)
-
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	if err = cmd.Start(); err != nil {
-		t.Fatalf("couldn't start the app: %v", err)
+	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
+	scrapeConfig := scrape.Config{
+		TickCh: tk.C,
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
 	}
+
+	go scrape.StartLoop(&scrapeConfig, &config)
 
 	// Wait for the application to poll the link site and check for emails
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
-	err = cmd.Process.Signal(os.Interrupt)
-	// At this point you need to find the process and kill it manually.
-	// This messes up the test, so we panic.
-	if err != nil {
-		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
-	}
+	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
 
-	// it's okay for the application to exit with an error--we want to proceed
-	// with the test suite so we can get visibility into those errors
-	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
-		t.Fatalf("couldn't stop the application process: %v", err)
-	}
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
@@ -599,8 +498,8 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 // Test that the -noemail flag causes email bodies to be printed to stdout,
 // and that no emails are sent.
 func TestNoEmailFlag(t *testing.T) {
-	stopIntervalS := 6
-	pollIntervalS := 5
+	stopIntervalMS := 600
+	pollIntervalMS := 500
 
 	// Ensure that all emails are the result of polling a single e-publication
 	epubs := 1
@@ -632,53 +531,33 @@ func TestNoEmailFlag(t *testing.T) {
 
 	// We'll still fire up an SMTP server, but we shouldn't be sending anything
 	// to it.
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			PollInterval:      fmt.Sprintf("%vs", pollIntervalMS),
+			NoEmail:           true,
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf(
-			"-config=%v/%v",
-			testenv.tempDirPath,
-			"config.yaml",
-		),
-		"-noemail",
-	)
+	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
+	var msg bytes.Buffer
 
-	cmd.Stderr = os.Stderr
-	// Capture stdout in a buffer so we can capture the results
-	var cmdOut bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &cmdOut)
-
-	if err = cmd.Start(); err != nil {
-		t.Fatalf("couldn't start the app: %v", err)
+	scrapeConfig := scrape.Config{
+		TickCh:   tk.C,
+		ErrCh:    make(chan error),
+		StopCh:   make(chan struct{}),
+		OutputWr: &msg,
 	}
 
-	time.Sleep(time.Duration(stopIntervalS) * time.Second)
-	err = cmd.Process.Signal(os.Interrupt)
+	go scrape.StartLoop(&scrapeConfig, &config)
 
-	// At this point you need to find the process and kill it manually.
-	// This messes up the test, so we panic.
-	if err != nil {
-		t.Fatalf("pid %v could not be interrupted", cmd.Process.Pid)
-	}
-
-	// it's okay for the application to exit with an error--we want to proceed
-	// with the test suite so we can get visibility into those errors
-	if err := cmd.Wait(); err != nil && !strings.Contains(err.Error(), "exit status") {
-		t.Fatalf("couldn't stop the application process: %v", err)
-	}
+	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
+	scrapeConfig.StopCh <- struct{}{} // stop the scraper
 
 	em1, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
@@ -688,9 +567,9 @@ func TestNoEmailFlag(t *testing.T) {
 		t.Fatalf("expected to receive zero emails but got %v", em1)
 	}
 
-	o, err := io.ReadAll(&cmdOut)
+	o, err := io.ReadAll(&msg)
 	if err != nil {
-		t.Fatalf("could not read from the command output: %v", err)
+		t.Fatalf("could not read from the scraper output: %v", err)
 	}
 
 	links := smtptest.ExtractItems(string(o))
@@ -732,35 +611,30 @@ func TestOneOffFlag(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			OneOff:            true,
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-		"-oneoff",
-	)
-
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
+	scrapeConfig := scrape.Config{
+		TickCh: nil, // since we're using a one-off configuration
+		ErrCh:  make(chan error),
+		StopCh: make(chan struct{}),
+	}
 
 	dbBefore := totalBadgerDataFileSize(testenv.tempDirPath)
 
-	// The -oneoff flag should cause the command to become a discrete job
-	if err = cmd.Run(); err != nil {
-		t.Fatalf("couldn't run the app: %v", err)
-	}
+	// The -oneoff flag should cause the scraper loop to run as a one-off
+	// job
+	scrape.StartLoop(&scrapeConfig, &config)
 
 	dbAfter := totalBadgerDataFileSize(testenv.tempDirPath)
 
@@ -778,7 +652,7 @@ func TestOneOffFlag(t *testing.T) {
 		t.Errorf("can't retrieve email from the test SMTP server: %v", err)
 	}
 
-	// The -oneoff flag hsould cause only one email to be sent
+	// The -oneoff flag should cause only one email to be sent
 	if len(ems) != 1 {
 		t.Errorf(
 			"expecting one but got %v",
@@ -817,36 +691,31 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 		}
 	}
 
-	err = createAppConfig(
-		fmt.Sprintf("%v/%v", testenv.tempDirPath, "config.yaml"),
+	config, err := createUserConfig(
 		appConfigOptions{
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			OneOff:            true,
+			NoEmail:           true,
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Run the application from the entrypoint with our new config
-	cmd := exec.Command(
-		appPath,
-		fmt.Sprintf("-config=%v/%v", testenv.tempDirPath, "config.yaml"),
-		"-oneoff",
-		"-noemail",
-	)
-
-	cmd.Stderr = os.Stderr
-	// Capture stdout in a buffer so we can capture the results
-	var cmdOut bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &cmdOut)
-
-	// The -oneoff flag should cause the command to become a discrete job
-	if err = cmd.Run(); err != nil {
-		t.Fatalf("couldn't run the app: %v", err)
+	var msg bytes.Buffer
+	scrapeConfig := scrape.Config{
+		TickCh:   nil, // since we're using a one-off configuration
+		ErrCh:    make(chan error),
+		StopCh:   make(chan struct{}),
+		OutputWr: &msg,
 	}
+
+	// The -oneoff flag should cause the scraper loop to run as a one-off
+	// job
+	scrape.StartLoop(&scrapeConfig, &config)
 
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
@@ -856,7 +725,7 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 		t.Fatalf("expected to receive zero emails but got %v", ems)
 	}
 
-	o, err := io.ReadAll(&cmdOut)
+	o, err := io.ReadAll(&msg)
 	if err != nil {
 		t.Fatalf("could not read from the command output: %v", err)
 	}
