@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"reflect"
 	"strings"
 	"testing"
 	"testing/quick"
@@ -385,11 +384,12 @@ func TestHighestRepeatingContainers(t *testing.T) {
 
 func TestExtractCaptionFromContainer(t *testing.T) {
 	cases := []struct {
-		description string
-		html        string
-		expected    string
-		expectErr   bool
-		selector    string
+		description      string
+		html             string
+		expected         string
+		expectErr        bool
+		selector         string
+		minTextNodeWords int
 	}{
 		{
 			description: "straightforward case",
@@ -403,12 +403,14 @@ func TestExtractCaptionFromContainer(t *testing.T) {
 </div>
 </body>	
 </html>`,
-			expected:  "This is the beginning of a long, multi-tag text node.",
+			expected: "This is the beginning of a long, multi-tag text" +
+				" node. This is the end.",
 			expectErr: false,
 		},
 		{
-			description: "text nodes in block elements unrelated to a caption",
-			selector:    "li",
+			description:      "text nodes in block elements unrelated to a caption",
+			selector:         "li",
+			minTextNodeWords: 3,
 			html: `<li>
 	<img src="img1.png" alt="A cool image">
 	<div class="itemHolder">
@@ -419,7 +421,7 @@ func TestExtractCaptionFromContainer(t *testing.T) {
 	Click here
 	</a>
 </li>`,
-			expected:  "This is a hot take!",
+			expected:  "This is a hot take! Click here.",
 			expectErr: false,
 		},
 		// Based on actual HTML from "aldaily.com". Original link replaced
@@ -430,12 +432,15 @@ func TestExtractCaptionFromContainer(t *testing.T) {
 			html: `<p>
 <strong>Long novels</strong> offer pleasures that come from having traveled with a character over time. Can gimmicks reproduce that in shorter books?&nbsp;...&nbsp;<a href="https://www.example.com/magazine/archive/2022/04/jennifer-egan-goon-squad-candy-house/622831/">more&nbsp;»</a>
 </p>`,
-			expected:  "Long novels offer pleasures that come from having traveled with a character over time. Can gimmicks reproduce that in shorter books?...more»",
+			expected: "Long novels offer pleasures that come " +
+				"from having traveled with a character over time. Can " +
+				"gimmicks reproduce that in shorter...",
 			expectErr: false,
 		},
 		{
-			description: "Intelligencer feed item",
-			selector:    "a",
+			description:      "Intelligencer feed item",
+			selector:         "a",
+			minTextNodeWords: 3,
 			html: `<a
 href="http://example.com/intelligencer/2022/04/letitia-james-is-going-after-gas-price-gougers.html"
 class="feed-item article"
@@ -460,12 +465,13 @@ class="feed-item article"
 	</div>
 </div>
 </a>`,
-			expected:  "The state attorney general is probing oil-industry practices, as companies like Exxon rake in big bucks while consumers pay more.",
+			expected:  "Letitia James Is Going After Gas-Price Gougers. By Kevin T. Dugan. The state attorney general is probing oil-industry practices, as...",
 			expectErr: false,
 		},
 		{
-			description: "Slate most-read item",
-			selector:    "a",
+			description:      "Slate most-read item",
+			selector:         "a",
+			minTextNodeWords: 3,
 			html: `<section class="most-engaged-teaser" data-tb-region-item="" data-tb-owning-region-name="Most Engaged" data-tb-owning-region-index="0" uniqueid="ID826716621843200544" data-tb-shadow-region-item="0-0">
 <a href="https://slate.com/news-and-politics/2022/04/history-textbook-controversy-new-orleans-louisiana.html">
 
@@ -484,7 +490,7 @@ Jordan Hirsch
 
 </a>
 </section>`,
-			expected:  "New Orleans’ Self-Mythology Dates Back to a Shockingly Racist Old Textbook",
+			expected:  "New Orleans’ Self-Mythology Dates Back to a Shockingly Racist Old Textbook.",
 			expectErr: false,
 		},
 		{
@@ -492,9 +498,31 @@ Jordan Hirsch
 			html: `<li>
 	<div>May 6:</div><div>This is something that happened <a href="http://www.example.com/stories/hot-take">today</a></div>
 </li>`,
-			selector:  "li",
+			selector:         "li",
+			minTextNodeWords: 3,
+			expectErr:        false,
+			expected:         "This is something that happened today.",
+		},
+		{
+			description:      "short block element",
+			selector:         "div",
+			minTextNodeWords: 3,
+			html: `<html>
+<head></head>
+<body>
+<div>
+    <div class="byline">
+      By
+      <span>First</span><span>Last</span>
+    </div>
+    <p>This is the beginning of a long, multi-tag <a href="#">text node</a>. </p>
+    <p>This is the end.</p>
+</div>
+</body>	
+</html>`,
+			expected: "This is the beginning of a long, multi-tag text" +
+				" node. This is the end.",
 			expectErr: false,
-			expected:  "This is something that happened today",
 		},
 	}
 
@@ -507,7 +535,7 @@ Jordan Hirsch
 			}
 			s := cascadia.MustCompile(tc.selector)
 			n := s.MatchFirst(h)
-			c, err := extractCaptionFromContainer(n)
+			c, err := extractCaptionFromContainer(n, tc.minTextNodeWords)
 
 			if (err != nil) != tc.expectErr {
 				t.Fatalf("expected error status of %v but got %v with err %v", tc.expectErr, err != nil, err)
@@ -515,102 +543,6 @@ Jordan Hirsch
 
 			if c != tc.expected {
 				t.Fatalf("expected caption %q but got %q", tc.expected, c)
-			}
-
-		})
-	}
-
-}
-
-func TestExtractCaptionCandidate(t *testing.T) {
-	cases := []struct {
-		description string
-		html        string
-		expected    captionCandidate
-		selector    cascadia.Selector
-	}{
-		{
-			description: "whole container",
-			html: `<li>
-<img src="img1.png" alt="A cool image">
-<span class="itemHolder">
-	<span class="itemNumber">1. </span>
-	<span class="itemName">This is a hot take!</span>
-</span>
-<a href="http://www.example.com/stories/hot-take">
-Click here
-</a>
-</li>`,
-			expected: captionCandidate{
-				text:  "1. This is a hot take! Click here",
-				nodes: 1,
-				score: 16,
-			},
-			selector: cascadia.MustCompile("li"),
-		},
-		{
-			description: "innermost text node",
-			html: `<li>
-<img src="img1.png" alt="A cool image">
-<span class="itemHolder">
-	<span class="itemNumber">1.</span>
-	<span class="itemName">This is a hot take!</span>
-</span>
-<a href="http://www.example.com/stories/hot-take">
-Click here
-</a>
-</li>`,
-			expected: captionCandidate{
-				text:  "This is a hot take!",
-				nodes: 1,
-				score: 10,
-			},
-			selector: cascadia.MustCompile("span.itemName"),
-		},
-		{
-			description: "multi-tag caption should win",
-			html: `<html>
-<head></head>
-<body>
-<div>
-	<p>This is the beginning of a long, multi-tag <a href="#">text node</a>. </p>
-	<p>This is the end.</p>
-</div>
-</body>	
-</html>`,
-			selector: cascadia.MustCompile("div"),
-			expected: captionCandidate{
-				text:  "This is the beginning of a long, multi-tag text node. This is the end.",
-				nodes: 3,
-				score: 10,
-			},
-		},
-		{
-			description: "block tags on a single line",
-			html: `<li>
-	<div>May 6:</div><div>This is something that happened <a href="http://www.example.com/stories/hot-take">today</a></div>
-</li>`,
-			expected: captionCandidate{
-				text:  "May 6:This is something that happened today",
-				nodes: 3,
-				score: 5.3333335,
-			},
-			selector: cascadia.MustCompile("li"),
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.description, func(t *testing.T) {
-			r := strings.NewReader(tc.html)
-			h, err := html.Parse(r)
-			if err != nil {
-				t.Fatal(err)
-			}
-			n := tc.selector.MatchFirst(h)
-			c := extractCaptionCandidate(n)
-
-			if !reflect.DeepEqual(c, tc.expected) {
-				t.Fatalf("expected caption candidate %+v but got %+v", tc.expected, c)
 			}
 
 		})

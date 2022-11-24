@@ -3,6 +3,7 @@ package linksrc
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -89,20 +90,26 @@ func NewSet(r io.Reader, conf Config, code int) Set {
 		s.AddMessage(g)
 	}
 
+	s.items = v
+
+	// Fix invalid data before we enforce the item limit, since removing
+	// invalid items might take us under the limit.
+	s = cleanSet(s)
+
 	// If the number of list items we scraped is over the limit, we'll
 	// arbitrarily exclude some list items from our search by making the
 	// length of our final result slice less than the length of the initial
 	// result slice.
 	var limit uint
 
-	if conf.MaxItems == 0 || len(v) < int(conf.MaxItems) {
+	if conf.MaxItems == 0 || len(s.items) < int(conf.MaxItems) {
 		// i.e., disregard the limit if it doesn't apply
-		limit = uint(len(v))
+		limit = uint(len(s.items))
 	} else {
 		limit = conf.MaxItems
 	}
 
-	s.items = enforceLimit(v, limit)
+	s.items = enforceLimit(s.items, limit)
 
 	return s
 
@@ -122,6 +129,25 @@ func enforceLimit(v map[string]LinkItem, limit uint) map[string]LinkItem {
 	}
 	return m
 
+}
+
+// cleanSet prepares s for storage and email, returning a copy of s with
+// unexpected features removed. In particular, cleanSet removes empty link items
+// from the input Set.
+func cleanSet(s Set) Set {
+	p := Set{}
+	p.Name = s.Name
+	p.messages = s.messages
+	p.items = make(map[string]LinkItem)
+
+	for k, v := range s.items {
+		if strings.Trim(v.Caption, "\n\t ") != "" {
+			p.items[k] = v
+		}
+
+	}
+
+	return p
 }
 
 // Set represents a set of link items. It's not meant to be modified by

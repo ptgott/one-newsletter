@@ -15,14 +15,14 @@
    classification (e.g.,
    https://www.imperva.com/blog/how-incapsula-client-classification-challenges-bots/).
 
-One example is https://aldaily.com/articles-of-note, where the first request to
-the page gets a 301 redirect containing a cookie and a `Location` header
-pointing to the same path as before. The subsequent request uses the cookie.
+   One example is https://aldaily.com/articles-of-note, where the first request
+   to the page gets a 301 redirect containing a cookie and a `Location` header
+   pointing to the same path as before. The subsequent request uses the cookie.
 
-Make the One Newsletter HTTP client more sophisticated so it passes client
-classification tests (unless it genuinely shouldn't by some commonly accepted
-standard). For example, we can set a `Jar` and `CheckRedirect` in the
-`http.Client` (https://pkg.go.dev/net/http#Client).
+   Make the One Newsletter HTTP client more sophisticated so it passes client
+   classification tests (unless it genuinely shouldn't by some commonly accepted
+   standard). For example, we can set a `Jar` and `CheckRedirect` in the
+   `http.Client` (https://pkg.go.dev/net/http#Client).
 
 1. Account for the possibility that some sites are dynamic. Maybe use a headless
    browser for all requests, rather than Go's HTTP client?
@@ -31,10 +31,11 @@ standard). For example, we can set a `Jar` and `CheckRedirect` in the
 
 1. Make it easier to test new configurations.
 
-- More helpful warnings about bad link selectors (e.g., not specific enough).
-- Add verbose logs re: where in the automatic link parsing process One
-- Newsletter failed to parse links. This would be useful for `oneoff`/`noemail`.
-- Send the first email right away rather than after the scraping interval. This
+  - More helpful warnings about bad link selectors (e.g., not specific enough).
+  - Add verbose logs re: where in the automatic link parsing process One
+  - Newsletter failed to parse links. This would be useful for
+  - `oneoff`/`noemail`.  Send the first email right away rather than after the
+  - scraping interval. This
   will make it easier to determine whether the app is running as expected.
 
 1. Include help text when the CLI is run without arguments. Also add a `help` subcommand and flag.

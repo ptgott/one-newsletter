@@ -11,7 +11,12 @@ import (
 )
 
 const (
-	defaultMaxItems = 5 // Set a low default so we don't accidentally process a ton of links
+	// Set a low default so we don't accidentally process a ton of links
+	defaultMaxItems = 5
+
+	// By default, we won't display one-word block element text, which looks
+	// unattractive in captions.
+	defaultMinElementWords = 3
 )
 
 // Config stores options for the link source container.
@@ -36,6 +41,13 @@ type Config struct {
 	// Maximum number of Items in a Set. If a scraper returns more than this
 	// within a link site, Items will be chosen arbitrarily.
 	MaxItems uint
+	// The minimum number of words that a block-level HTML element must
+	// contain for it to be included in a link item's caption. Used to
+	// exclude short pieces of text like blog tags, bylines, or anything
+	// else that can get in the way of a caption's substance.
+	//
+	// Must be greater than zero. The default is three.
+	ShortElementFilter int
 }
 
 // CheckAndSetDefaults validates c and either returns a copy of c with default
@@ -141,6 +153,21 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		}
 	}
 
+	var mt int
+	if _, eok := v["minElementWords"]; !eok {
+		// We need to set this when unmarshaling YAML, since otherwise
+		// downstream consumers won't know if a zero value is
+		// intentional.
+		mt = defaultMinElementWords
+	} else {
+		mt, err = strconv.Atoi(v["minElementWords"])
+
+		if err != nil || mt < 0 {
+			return fmt.Errorf("invalid minElementWords: must be a positive integer")
+		}
+
+	}
+	c.ShortElementFilter = mt
 	return nil
 
 }
