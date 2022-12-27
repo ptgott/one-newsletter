@@ -45,11 +45,12 @@ func TestNewSet(t *testing.T) {
 			name: "canonical/intended case",
 			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
-				Name:            "My Cool Publication",
-				URL:             mustParseURL("http://www.example.com"),
-				ItemSelector:    css.MustCompile("body div#mostRead ol li"),
-				CaptionSelector: css.MustCompile("div a.itemName"),
-				LinkSelector:    css.MustCompile("div a.itemName"),
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				ItemSelector:       css.MustCompile("body div#mostRead ol li"),
+				CaptionSelector:    css.MustCompile("div a.itemName"),
+				LinkSelector:       css.MustCompile("div a.itemName"),
+				ShortElementFilter: 3,
 			},
 			want: Set{
 				Name: "My Cool Publication",
@@ -73,11 +74,12 @@ func TestNewSet(t *testing.T) {
 			name: "canonical/intended case with relative link URLs",
 			html: mustReadFile(path.Join("testdata", "straightforward-relative-links.html"), t),
 			conf: Config{
-				Name:            "My Cool Publication",
-				URL:             mustParseURL("http://www.example.com"),
-				ItemSelector:    css.MustCompile("body div#mostRead ol li"),
-				CaptionSelector: css.MustCompile("a.itemName"),
-				LinkSelector:    css.MustCompile("a"),
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				ItemSelector:       css.MustCompile("body div#mostRead ol li"),
+				CaptionSelector:    css.MustCompile("a.itemName"),
+				LinkSelector:       css.MustCompile("a"),
+				ShortElementFilter: 3,
 			},
 			want: Set{
 				Name: "My Cool Publication",
@@ -101,9 +103,10 @@ func TestNewSet(t *testing.T) {
 			name: "canonical/intended case with only a link selector",
 			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
-				Name:         "My Cool Publication",
-				URL:          mustParseURL("http://www.example.com"),
-				LinkSelector: css.MustCompile("a"),
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				LinkSelector:       css.MustCompile("a"),
+				ShortElementFilter: 3,
 			},
 			want: Set{
 				Name: "My Cool Publication",
@@ -127,9 +130,10 @@ func TestNewSet(t *testing.T) {
 			name: "canonical/intended case with relative link URLs and only a link selector",
 			html: mustReadFile(path.Join("testdata", "straightforward-relative-links.html"), t),
 			conf: Config{
-				Name:         "My Cool Publication",
-				URL:          mustParseURL("http://www.example.com"),
-				LinkSelector: css.MustCompile("a"),
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				LinkSelector:       css.MustCompile("a"),
+				ShortElementFilter: 3,
 			},
 			want: Set{
 				Name: "My Cool Publication",
@@ -242,21 +246,8 @@ func TestNewSet(t *testing.T) {
 				LinkSelector:    css.MustCompile("a"),
 			},
 			want: Set{
-				Name: "My Cool Publication",
-				items: map[string]LinkItem{
-					"http://www.example.com/stories/hot-take": {
-						LinkURL: "http://www.example.com/stories/hot-take",
-						Caption: "",
-					},
-					"http://www.example.com/stories/stuff-happened": {
-						LinkURL: "http://www.example.com/stories/stuff-happened",
-						Caption: "",
-					},
-					"http://www.example.com/storiesreally-true": {
-						LinkURL: "http://www.example.com/storiesreally-true",
-						Caption: "",
-					},
-				},
+				Name:  "My Cool Publication",
+				items: map[string]LinkItem{},
 			},
 		},
 		{
@@ -320,25 +311,26 @@ func TestNewSet(t *testing.T) {
 			name: "autodetect: ny magazine intelligencer",
 			html: mustReadFile(path.Join("testdata", "intelligencer-feed.html"), t),
 			conf: Config{
-				Name:         "Intelligencer",
-				URL:          mustParseURL("http://www.example.com"),
-				LinkSelector: css.MustCompile("a.feed-item.article"),
-				MaxItems:     3,
+				Name:               "Intelligencer",
+				URL:                mustParseURL("http://www.example.com"),
+				LinkSelector:       css.MustCompile("a.feed-item.article"),
+				MaxItems:           3,
+				ShortElementFilter: 3,
 			},
 			want: Set{
 				Name: "Intelligencer",
 				items: map[string]LinkItem{
 					"http://www.example.com/intelligencer/2022/04/subway-shooting-proved-regular-new-yorkers-fight-crime-too.html": {
 						LinkURL: "http://www.example.com/intelligencer/2022/04/subway-shooting-proved-regular-new-yorkers-fight-crime-too.html",
-						Caption: "Mayor Adams needs to realize that cops aren’t the only crimefighters, as average New Yorkers proved during the hunt for the subway shooter.",
+						Caption: "Regular New Yorkers Fight Crime, Too. Mayor Adams needs to realize that cops aren’t the only crimefighters, as average...",
 					},
 					"http://www.example.com/intelligencer/2022/04/what-happened-to-paxlovid-the-covid-19-wonder-drug.html": {
 						LinkURL: "http://www.example.com/intelligencer/2022/04/what-happened-to-paxlovid-the-covid-19-wonder-drug.html",
-						Caption: "The much-hyped antiviral arrived too late for the Omicron wave, but it remains a powerful — and potentially versatile — weapon against COVID-19.",
+						Caption: "What Happened to Paxlovid, the COVID Wonder Drug? The much-hyped antiviral arrived too late for the Omicron wave, but it...",
 					},
 					"http://www.example.com/intelligencer/article/what-republicans-mean-rigged-election.html": {
 						LinkURL: "http://www.example.com/intelligencer/article/what-republicans-mean-rigged-election.html",
-						Caption: "Republicans claim Democrats are breaking election and voter laws. But deep down the complaint may be that perfectly legal votes are bad for the GOP.",
+						Caption: "What Is a ‘Rigged’ Election Anyway? Republicans claim Democrats are breaking election and voter laws. But deep down the complaint...",
 					},
 				},
 				messages: nil,
@@ -358,18 +350,43 @@ func TestNewSet(t *testing.T) {
 				items: map[string]LinkItem{
 					"https://www.example.com/2022/05/05/books/carlo-rovelli-physicist-book.html": {
 						LinkURL: "https://www.example.com/2022/05/05/books/carlo-rovelli-physicist-book.html",
-						Caption: "May 6, 2022 | “Capital ‘T,’ ‘the Truth’ … I don’t think it’s interesting,” says Carlo Rovelli. “The interesting thing is the small ‘t’...more»",
+						Caption: "May 6, 2022 | “Capital ‘T,’ ‘the Truth’ … I don’t think it’s interesting,” says Carlo Rovelli. “The interesting thing...",
 					},
 					"https://www.example.com/archive/great-debates/weighing-evidence": {
 						LinkURL: "https://www.example.com/archive/great-debates/weighing-evidence",
-						Caption: "May 5, 2022 | Science advances not by convincing skeptics they are wrong, but by waiting until those skeptics die. Consider Galileo...more»",
+						Caption: "May 5, 2022 | Science advances not by convincing skeptics they are wrong, but by waiting until those skeptics die. Consider...",
 					},
 					"https://www.example.com/latest/miloszs-magic-mountain-neumeyer": {
 						LinkURL: "https://www.example.com/latest/miloszs-magic-mountain-neumeyer",
-						Caption: "May 4, 2022 | It's been said that every intellectual forced to emigrate is mutilated. So it was with Czeslaw Miloszin California...more»",
+						Caption: "May 4, 2022 | It's been said that every intellectual forced to emigrate is mutilated. So it was with Czeslaw...",
 					},
 				},
 				messages: nil},
+		},
+		{
+			name: "news source with a lot of short block-level HTMl text",
+			html: mustReadFile(path.Join("testdata", "music-reviews.html"), t),
+			conf: Config{
+				Name:               "Music Review Site",
+				URL:                mustParseURL("https://www.example.com"),
+				LinkSelector:       css.MustCompile("div.review a.review__link"),
+				ShortElementFilter: 0,
+			},
+			want: Set{
+				Name: "Music Review Site",
+				items: map[string]LinkItem{
+					"https://www.example.com/reviews/albums/100-gecs-snake-eyes-ep/": LinkItem{
+						LinkURL: "https://www.example.com/reviews/albums/100-gecs-snake-eyes-ep/",
+						Caption: "100 gecs. Snake Eyes EP. Experimental. Electronic. by: Joshua Minsoo Kim. December 12 2022.",
+					},
+					"https://www.example.com/reviews/albums/brakence-hypochondriac/": LinkItem{
+						LinkURL: "https://www.example.com/reviews/albums/brakence-hypochondriac/",
+						Caption: "brakence. hypochondriac. Rock. by: H.D. Angel. December 15 2022.",
+					},
+				},
+				messages: nil,
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -431,6 +448,73 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 			got := NewSet(mustReadFile(path.Join("testdata", "straightforward.html"), t), tt.conf, tt.code)
 			if len(got.items) != tt.wantSetLength {
 				t.Errorf("wanted a Set with %v links but got %v", tt.wantSetLength, got)
+			}
+		})
+	}
+}
+
+func TestSetClean(t *testing.T) {
+	testCases := []struct {
+		description string
+		input       Set
+		expected    Set
+	}{
+		{
+			description: "already clean set",
+			input: Set{
+				Name: "My Site 1",
+				items: map[string]LinkItem{
+					"item1": LinkItem{
+						LinkURL: "https://www.example.com/article1",
+						Caption: "This is my caption.",
+					},
+				},
+				messages: []string{},
+			},
+			expected: Set{
+				Name: "My Site 1",
+				items: map[string]LinkItem{
+					"item1": LinkItem{
+						LinkURL: "https://www.example.com/article1",
+						Caption: "This is my caption.",
+					},
+				},
+				messages: []string{},
+			},
+		},
+		{
+			description: "whitespace-only caption",
+			input: Set{
+				Name: "My Site 1",
+				items: map[string]LinkItem{
+					"item1": LinkItem{
+						LinkURL: "https://www.example.com/article1",
+						Caption: " ",
+					},
+					"item2": LinkItem{
+						LinkURL: "https://www.example.com/article2",
+						Caption: "Something happened today.",
+					},
+				},
+				messages: []string{},
+			},
+			expected: Set{
+				Name: "My Site 1",
+				items: map[string]LinkItem{"item2": LinkItem{
+					LinkURL: "https://www.example.com/article2",
+					Caption: "Something happened today.",
+				},
+				},
+				messages: []string{},
+			},
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.description, func(t *testing.T) {
+			actual := cleanSet(c.input)
+			if !reflect.DeepEqual(actual, c.expected) {
+				t.Fatalf("%v: expected %+v but got %+v", c.description, c.expected, actual)
 			}
 		})
 	}

@@ -115,6 +115,65 @@ linkSelector: "123"`,
 	}
 }
 
+func TestUnmarshalYAMLWithMinElementWords(t *testing.T) {
+
+	testCases := []struct {
+		description                string
+		config                     string
+		expectedShortElementFilter int
+		expectErr                  bool
+	}{
+
+		{
+			description: "blank minElementWords",
+			config: `name: site-38911
+url: http://127.0.0.1:38911
+itemSelector: "ul li"
+captionSelector: "p"
+linkSelector: "a"
+maxItems: 5
+`,
+			expectedShortElementFilter: 3,
+			expectErr:                  false,
+		},
+		{
+			description: "minElementWords of zero",
+			config: `name: site-38911
+url: http://127.0.0.1:38911
+itemSelector: "ul li"
+captionSelector: "p"
+linkSelector: "a"
+maxItems: 5
+minElementWords: 0
+`,
+			expectedShortElementFilter: 0,
+			expectErr:                  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			dec := yaml.NewDecoder(bytes.NewBuffer([]byte(tc.config)))
+			var c Config
+			if err := dec.Decode(&c); (err != nil) != tc.expectErr {
+				t.Errorf(
+					"expected error status of %v but got %v with error %v",
+					tc.expectErr,
+					err != nil,
+					err,
+				)
+			}
+			if tc.expectedShortElementFilter != c.ShortElementFilter {
+				t.Errorf(
+					"expected short element filter of %v but got %v",
+					tc.expectedShortElementFilter,
+					c.ShortElementFilter,
+				)
+			}
+		})
+	}
+}
+
 func TestValidateURL(t *testing.T) {
 
 	cases := []struct {
@@ -348,5 +407,28 @@ func TestCheckAndSetDefaults(t *testing.T) {
 				t.Fatalf("expected no error but got %v", err)
 			}
 		})
+	}
+}
+
+func TestCheckAndSetDefaultsWithZeroShortElementFilter(t *testing.T) {
+	c := Config{
+		Name:               "site-38911",
+		URL:                mustParseURL("http://127.0.0.1:38911"),
+		LinkSelector:       cascadia.MustCompile("a"),
+		ItemSelector:       cascadia.MustCompile("ul li"),
+		CaptionSelector:    cascadia.MustCompile("p"),
+		ShortElementFilter: 0,
+	}
+
+	c2, err := c.CheckAndSetDefaults()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if c2.ShortElementFilter != c.ShortElementFilter {
+		t.Fatalf(
+			"expected short element filter of %v but got %v",
+			c.ShortElementFilter,
+			c2.ShortElementFilter,
+		)
 	}
 }
