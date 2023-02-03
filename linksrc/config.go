@@ -68,10 +68,11 @@ func (c *Config) CheckAndSetDefaults() (Config, error) {
 	}
 
 	// Check for the presence of an itemSelector, captionSelector, and
-	// linkSelector. If there's only a linkSelector, we enable link auto-
-	// detection. Otherwise, we need all three fields.
-	if c.LinkSelector == nil {
-		return Config{}, errors.New("you must provide a link selector")
+	// linkSelector. If there's only a linkSelector, we enable caption auto-
+	// detection. If there is no link selector, we auto-detect links.
+	// Otherwise, we need all three fields.
+	if c.LinkSelector == nil && (c.ItemSelector != nil || c.CaptionSelector != nil) {
+		return Config{}, errors.New("to detect captions manually, you must provide a link selector, item selector, and caption selector")
 	}
 
 	if (c.ItemSelector == nil && c.CaptionSelector != nil) ||

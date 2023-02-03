@@ -149,6 +149,15 @@ minElementWords: 0
 			expectedShortElementFilter: 0,
 			expectErr:                  false,
 		},
+		{
+			description: "minElementWords of three, URL-only mode",
+			config: `name: site-38911
+url: http://127.0.0.1:38911
+minElementWords: 3
+`,
+			expectedShortElementFilter: 3,
+			expectErr:                  false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -335,7 +344,14 @@ func TestCheckAndSetDefaults(t *testing.T) {
 			},
 		},
 		{
-			description:        "no link selector",
+			description: "valid case with no link selector",
+			input: Config{
+				Name: "site-38911",
+				URL:  mustParseURL("http://127.0.0.1:38911"),
+			},
+		},
+		{
+			description:        "item selector and caption selector but no link selector",
 			expectErrSubstring: "link selector",
 			input: Config{
 				Name:            "site-38911",

@@ -1,6 +1,7 @@
 package scrape
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"sync"
@@ -88,7 +89,12 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 				return
 			}
 			defer r.Body.Close()
-			s := linksrc.NewSet(r.Body, lc, r.StatusCode)
+			ctx, cancel := context.WithTimeout(
+				context.Background(),
+				time.Duration(1)*time.Minute,
+			)
+			defer cancel()
+			s := linksrc.NewSet(ctx, r.Body, lc, r.StatusCode)
 
 			bc <- s
 

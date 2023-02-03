@@ -1,12 +1,15 @@
 package linksrc
 
 import (
+	"context"
 	"io"
 	"net/url"
 	"os"
 	"path"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	css "github.com/andybalholm/cascadia"
 )
@@ -19,6 +22,16 @@ func mustReadFile(p string, t *testing.T) io.Reader {
 		t.Fatal(err)
 	}
 	return f
+}
+
+// stringFromFile reads a file at path p and returns a UTF-8 encoded string
+func stringFromFile(p string, t *testing.T) string {
+	f := mustReadFile(p, t)
+	b, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
 }
 
 // mustParseURL is a test utility for returning a single value
@@ -308,7 +321,7 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "autodetect: ny magazine intelligencer",
+			name: "autodetect with link selector: ny magazine intelligencer",
 			html: mustReadFile(path.Join("testdata", "intelligencer-feed.html"), t),
 			conf: Config{
 				Name:               "Intelligencer",
@@ -337,7 +350,7 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "autodetect: arts and letters daily",
+			name: "autodetect with link selector: arts and letters daily",
 			html: mustReadFile(path.Join("testdata", "aldaily.html"), t),
 			conf: Config{
 				Name:         "Arts and Letters Daily",
@@ -388,13 +401,96 @@ func TestNewSet(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "canonical/intended case with a URL-only config",
+			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			conf: Config{
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "My Cool Publication",
+				items: map[string]LinkItem{
+					"http://www.example.com/stories/hot-take": {
+						LinkURL: "http://www.example.com/stories/hot-take",
+						Caption: "This is a hot take!",
+					},
+					"http://www.example.com/stories/stuff-happened": {
+						LinkURL: "http://www.example.com/stories/stuff-happened",
+						Caption: "Stuff happened today, yikes.",
+					},
+					"http://www.example.com/storiesreally-true": {
+						LinkURL: "http://www.example.com/storiesreally-true",
+						Caption: "Is this supposition really true?",
+					},
+				},
+			},
+		},
+		{
+			name: "URL-only config with multiple container types",
+			html: mustReadFile(path.Join("testdata", "straightforward_multiple_container_types.html"), t),
+			conf: Config{
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "My Cool Publication",
+				items: map[string]LinkItem{
+					"http://www.example.com/stories/hot-take": {
+						LinkURL: "http://www.example.com/stories/hot-take",
+						Caption: "This is a hot take!",
+					},
+					"http://www.example.com/stories/stuff-happened": {
+						LinkURL: "http://www.example.com/stories/stuff-happened",
+						Caption: "Stuff happened today, yikes.",
+					},
+					"http://www.example.com/stories/cool-headline": {
+						LinkURL: "http://www.example.com/stories/cool-headline",
+						Caption: "This is a headline for an article.",
+					},
+					"http://www.example.com/stories/cool-story": {
+						LinkURL: "http://www.example.com/stories/cool-story",
+						Caption: "This is a headline for another article.",
+					},
+				},
+			},
+		},
+		{
+			name: "autodetect in URL-only mode: NY magazine intelligencer",
+			html: mustReadFile(path.Join("testdata", "intelligencer-feed.html"), t),
+			conf: Config{
+				Name:               "Intelligencer",
+				URL:                mustParseURL("http://www.example.com"),
+				MaxItems:           3,
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "Intelligencer",
+				items: map[string]LinkItem{
+					"http://www.example.com/intelligencer/2022/04/subway-shooting-proved-regular-new-yorkers-fight-crime-too.html": {
+						LinkURL: "http://www.example.com/intelligencer/2022/04/subway-shooting-proved-regular-new-yorkers-fight-crime-too.html",
+						Caption: "Regular New Yorkers Fight Crime, Too. Mayor Adams needs to realize that cops aren’t the only crimefighters, as average...",
+					},
+					"http://www.example.com/intelligencer/2022/04/what-happened-to-paxlovid-the-covid-19-wonder-drug.html": {
+						LinkURL: "http://www.example.com/intelligencer/2022/04/what-happened-to-paxlovid-the-covid-19-wonder-drug.html",
+						Caption: "What Happened to Paxlovid, the COVID Wonder Drug? The much-hyped antiviral arrived too late for the Omicron wave, but it...",
+					},
+					"http://www.example.com/intelligencer/article/what-republicans-mean-rigged-election.html": {
+						LinkURL: "http://www.example.com/intelligencer/article/what-republicans-mean-rigged-election.html",
+						Caption: "What Is a ‘Rigged’ Election Anyway? Republicans claim Democrats are breaking election and voter laws. But deep down the complaint...",
+					},
+				},
+				messages: nil,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSet(tt.html, tt.conf, tt.code)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewSet() = %+v\nwanted: %+v", got, tt.want)
-			}
+			ctx := context.Background()
+			got := NewSet(ctx, tt.html, tt.conf, tt.code)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -445,7 +541,11 @@ func TestNewSetWithMaxLinks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSet(mustReadFile(path.Join("testdata", "straightforward.html"), t), tt.conf, tt.code)
+			got := NewSet(
+				context.Background(),
+				mustReadFile(path.Join("testdata", "straightforward.html"),
+					t,
+				), tt.conf, tt.code)
 			if len(got.items) != tt.wantSetLength {
 				t.Errorf("wanted a Set with %v links but got %v", tt.wantSetLength, got)
 			}

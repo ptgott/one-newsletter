@@ -47,6 +47,7 @@ github.com/flashmob/go-guerrilla v1.6.1/go.mod h1:ZT9TRggRsSY4ZVndoyx8TRUxi3tM/n
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
 github.com/fogleman/gg v1.3.0/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
+github.com/go-delve/delve v1.5.0 h1:gQsRvFdR0BGk19NROQZsAv6iG4w5QIZoJlxJeEUBb0c=
 github.com/go-delve/delve v1.5.0/go.mod h1:c6b3a1Gry6x8a4LGCe/CWzrocrfaHvkUxCj3k4bvSUQ=
 github.com/go-fonts/dejavu v0.1.0/go.mod h1:4Wt4I4OU2Nq9asgDCteaAaWZOV24E+0/Pwo0gppep4g=
 github.com/go-fonts/latin-modern v0.2.0/go.mod h1:rQVLdDMK+mK1xscDwsqM5J8U2jrRa3T0ecnM9pNujks=

@@ -1,20 +1,36 @@
 package linksrc
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
+	"github.com/rs/zerolog/log"
 	"golang.org/x/net/html"
 )
 
 // NewSet initializes a new collection of listed link items for an HTML
 // document Reader, link source configuration, and HTTP status code (which
 // is treated as a 200 OK if not set)
-func NewSet(r io.Reader, conf Config, code int) Set {
+func NewSet(ctx context.Context, r io.Reader, conf Config, code int) Set {
 	s := Set{
 		items: map[string]LinkItem{},
 	}
+	items := make(map[string]LinkItem)
+
+	start := time.Now()
+	defer func() {
+		elapsed := time.Since(start)
+		log.Info().Msgf(
+			"processed %v items for link source %q in %v ms",
+			len(items),
+			conf.Name,
+			elapsed.Milliseconds(),
+		)
+	}()
 
 	if r == nil {
 		s.AddMessage("could not read the HTML document in order to parse it")
@@ -77,20 +93,38 @@ func NewSet(r io.Reader, conf Config, code int) Set {
 		return s
 	}
 
-	var v map[string]LinkItem
-	var m []string
+	linkCh := make(chan LinkItem)
+	msg := make(chan string)
 
 	if conf.ItemSelector == nil || conf.CaptionSelector == nil {
-		v, m = autoDetectLinkItems(n, conf)
+		go autoDetectLinkItems(n, conf, linkCh, msg)
 	} else {
-		v, m = manuallyDetectLinkItems(n, conf)
+		go manuallyDetectLinkItems(n, conf, linkCh, msg)
 	}
 
-	for _, g := range m {
-		s.AddMessage(g)
-	}
+	for {
+		select {
+		case l, ok := <-linkCh:
+			if !ok {
+				goto finish
+			}
+			items[l.LinkURL] = l
+		case g, ok := <-msg:
+			if !ok {
+				goto finish
+			}
+			s.AddMessage(g)
+		case <-ctx.Done():
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				s.AddMessage(fmt.Sprintf("scraper %v timed out before it could extract links", s.Name))
 
-	s.items = v
+			}
+			goto finish
+		}
+	}
+finish:
+
+	s.items = items
 
 	// Fix invalid data before we enforce the item limit, since removing
 	// invalid items might take us under the limit.
