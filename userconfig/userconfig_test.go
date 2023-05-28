@@ -116,6 +116,24 @@ scraping:
     interval: 5s
     storageDir: ./tempTestDir3012705204`,
 		},
+		{
+			description:   "valid link source with no link selector",
+			shouldBeError: false,
+			shouldBeEmpty: false,
+			conf: `---
+email:
+    smtpServerAddress: smtp://0.0.0.0:123
+    fromAddress: mynewsletter@example.com
+    toAddress: recipient@example.com
+    username: MyUser123
+    password: 123456-A_BCDE
+link_sources:
+    - name: site-38911
+      url: http://127.0.0.1:38911
+scraping:
+    interval: 5s
+    storageDir: ./tempTestDir3012705204`,
+		},
 	}
 
 	for _, tc := range testCases {

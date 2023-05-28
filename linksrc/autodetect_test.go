@@ -1,14 +1,17 @@
 package linksrc
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"path"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/quick"
 
 	"github.com/andybalholm/cascadia"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -187,6 +190,168 @@ func TestContainersAreRepeating(t *testing.T) {
 		})
 	}
 
+}
+
+func TestBuildHTMLTree(t *testing.T) {
+	var expected = `<body>
+<div data[level]="0">
+<p data[level]="1">word word word</p>
+<p data[level]="1">word word word</p>
+</div>
+<div data[level]="0">
+<p data[level]="1">word word word</p>
+<p data[level]="1">word word word</p>
+</div>
+</body>`
+	n := html.Node{
+		Data:     "body",
+		DataAtom: atom.Body,
+		Type:     html.ElementNode,
+	}
+
+	buildHTMLTree(&n, 2, 0, 2, 3, 0)
+	var buf bytes.Buffer
+	if err := html.Render(&buf, &n); err != nil {
+		t.Fatal(err)
+	}
+
+	s := buf.String()
+	s = strings.ReplaceAll(s, "><", ">\n<")
+
+	assert.Equal(t, expected, s)
+
+}
+
+// buildHTMLTree recursively adds children to parent up to maxLevels. It adds
+// childrenPerNode children to each interior node, and inserts a text node of
+// wordsPerTextNode words to each leaf node. addedNodes keeps track of how
+// many nodes have been inserted into the tree so far. The function returns the
+// number of nodes in the tree.
+func buildHTMLTree(
+	parent *html.Node,
+	maxLevels int,
+	current int,
+	childrenPerNode int,
+	wordsPerTextNode int,
+	addedNodes int,
+) int {
+	// Count the parent node
+	if addedNodes == 0 {
+		addedNodes = 1
+	}
+
+	if maxLevels <= 1 {
+		return addedNodes
+	}
+
+	if maxLevels == current {
+		return addedNodes
+	}
+
+	var c html.Node
+	if current == maxLevels-1 {
+		c = html.Node{
+			Type:     html.ElementNode,
+			DataAtom: atom.P,
+			Data:     "p",
+		}
+
+		w := make([]string, wordsPerTextNode, wordsPerTextNode)
+		for i := range w {
+			w[i] = "word"
+		}
+		c.AppendChild(&html.Node{
+			Type:     html.TextNode,
+			DataAtom: atom.Plaintext,
+			Data:     strings.Join(w, " "),
+		})
+		addedNodes++
+	} else {
+		c = html.Node{
+			Type:     html.ElementNode,
+			DataAtom: atom.Div,
+			Data:     "div",
+		}
+	}
+
+	for i := 0; i < childrenPerNode; i++ {
+		k := c
+
+		k.Attr = append(k.Attr, html.Attribute{
+			Namespace: "",
+			Key:       "data[level]",
+			Val:       strconv.Itoa(current),
+		})
+		parent.AppendChild(&k)
+	}
+	current++
+
+	for n := parent.FirstChild; n != nil; n = n.NextSibling {
+		addedNodes = buildHTMLTree(
+			n,
+			maxLevels,
+			current,
+			childrenPerNode,
+			wordsPerTextNode,
+			addedNodes,
+		)
+	}
+
+	return addedNodes
+
+}
+
+func BenchmarkExtractCaptionFromContainer(b *testing.B) {
+	cases := []struct {
+		description      string
+		levels           int
+		childrenPerNode  int
+		wordsPerTextNode int
+	}{
+		{
+			description:      "1,025 nodes, 2 children per node, 5-word text nodes",
+			childrenPerNode:  2,
+			levels:           11,
+			wordsPerTextNode: 5,
+		},
+		{
+			description:      "1,025 nodes, 2 children per node, 1000-word text nodes",
+			childrenPerNode:  2,
+			levels:           11,
+			wordsPerTextNode: 1000,
+		},
+		{
+			description:      "17 nodes, 2 children per node, 10000-word text nodes",
+			childrenPerNode:  2,
+			levels:           5,
+			wordsPerTextNode: 10000,
+		},
+	}
+
+	for _, c := range cases {
+		b.Run(c.description, func(b *testing.B) {
+			n := html.Node{
+				DataAtom: atom.Body,
+				Data:     "body"}
+			addedNodes := buildHTMLTree(
+				&n,
+				c.levels,
+				0,
+				c.childrenPerNode,
+				c.wordsPerTextNode,
+				0,
+			)
+			fmt.Println("built an HTML tree with", addedNodes, "nodes")
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := extractCaptionFromContainer(&n, 3)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 // appendLeafNodes appends a child to parent until it reaches the
@@ -523,6 +688,13 @@ Jordan Hirsch
 			expected: "This is the beginning of a long, multi-tag text" +
 				" node. This is the end.",
 			expectErr: false,
+		},
+		{
+			description: "extracting from body in straightforward case",
+			selector:    "body",
+			html:        stringFromFile(path.Join("testdata", "straightforward.html"), t),
+			expected:    "",
+			expectErr:   true,
 		},
 	}
 

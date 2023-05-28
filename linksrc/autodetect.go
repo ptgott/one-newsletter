@@ -1,12 +1,14 @@
 package linksrc
 
 import (
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
 
+	"github.com/andybalholm/cascadia"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -206,10 +208,10 @@ type textNodeInfo struct {
 	container *html.Node
 }
 
-// extractTextFromNode conducts a recursive depth-first search of n, limiting
-// the search to containing node e and its children. If e is nil, it sets e to
-// n. It appends text node data to the string result until no more child nodes
-// remain, and returns the resulting string. No-op if n is nil.
+// extractTextFromNode conducts a recursive search of n, limiting the search to
+// containing node e and its children. If e is nil, it sets e to n. It appends
+// text node data to the string result until no more child nodes remain, and
+// returns the resulting string. No-op if n is nil.
 //
 // Performs the following operations when extracting text from a node:
 //
@@ -325,9 +327,9 @@ type captionCandidate struct {
 // and returns it as a string. Within each HTML node, it performs the following
 // operations:
 //
-// - If the node is a block-level element with fewer than m words, ignores the
-//   node's text.
-// - Ensures that block-level text nodes end in punctuation.
+//   - If the node is a block-level element with fewer than m words, ignores the
+//     node's text.
+//   - Ensures that block-level text nodes end in punctuation.
 //
 // After extracting text from child nodes, extractCaptionFromContainer:
 //
@@ -337,6 +339,10 @@ type captionCandidate struct {
 func extractCaptionFromContainer(n *html.Node, m int) (string, error) {
 	if n == nil {
 		return "", errors.New("cannot extract a caption from a nonexistent container")
+	}
+
+	if n.DataAtom == atom.Body || n.Data == "body" {
+		return "", errors.New("cannot extract a caption from an HTML body element")
 	}
 
 	c := extractTextFromNode(n, nil, "", m)
@@ -361,65 +367,87 @@ func extractCaptionFromContainer(n *html.Node, m int) (string, error) {
 }
 
 // autoDetectLinkItems uses the configured link selector to return a map of
-// link URLs to LinkItems. Also returns a slice of status messages to add to
+// link URLs to LinkItems. Sends status messages and LinkItems to the provided
+// channels, closing the channels when it has finished.
 // an email. n must be the root element.
-func autoDetectLinkItems(n *html.Node, conf Config) (map[string]LinkItem, []string) {
-	s := []string{}
-	v := make(map[string]LinkItem)
-
+func autoDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, messages chan string) {
+	// We're entering URL-only mode. Find all links and repeating containers
+	// around those links, even if there are multiple kinds of repeating
+	// containers.
 	if conf.LinkSelector == nil {
-		s = append(s, "Could not parse the link selector.")
-		return v, s
+		conf.LinkSelector = cascadia.MustCompile("a")
 	}
 
 	if n.Parent != nil {
-		s = append(s, "The provided HTML node is not the root HTML node. This is a bug.")
-		return v, s
+		messages <- "The provided HTML node is not the root HTML node. This is a bug."
+		close(links)
+		close(messages)
+		return
 	}
 
 	m := conf.LinkSelector.MatchAll(n)
 	if len(m) == 0 {
-		s = append(s,
-			fmt.Sprintf(
-				"The link selector you configured for %v did not match any HTML elements. ",
-				conf.URL.String())+
-				"Try the request from your browser or curl and check for any issues.",
-		)
-		return v, s
+		messages <- fmt.Sprintf(
+			"The link selector you configured for %v did not match any HTML elements. ",
+			conf.URL.String()) +
+			"Try the request from your browser or curl and check for any issues."
+		close(links)
+		close(messages)
+		return
+
 	}
 
-	h, err := highestRepeatingContainers(m)
-
-	if err != nil {
-		s = append(s, err.Error())
-		return v, s
-	}
-
-	for _, c := range h {
-
-		t, err := extractCaptionFromContainer(c.container, conf.ShortElementFilter)
-		if err != nil {
-			s = append(s, err.Error())
-			continue
+	// Find groups of links by:
+	// - Concatenating the data atoms of each node's ancestors into a
+	//   string, e.g., "adivliol", then take an MD5 hash of the string.
+	// - Use that hash to identify groups of links
+	// - Find the highest repeating container for each group, e.g., the HtML
+	//   node that we can use to extract a caption.
+	grp := make(map[[md5.Size]byte][]*html.Node)
+	for _, nd := range m {
+		ancestors := ""
+		for c := nd; c.Parent != nil && c.Parent.DataAtom != atom.Html; c = c.Parent {
+			ancestors += c.DataAtom.String()
 		}
-		for _, a := range c.link.Attr {
-			if a.Key == "href" {
-				u, err := url.Parse(a.Val)
+		h := md5.Sum([]byte(ancestors))
+		if _, ok := grp[h]; !ok {
+			grp[h] = []*html.Node{}
+		}
+		grp[h] = append(grp[h], nd)
+	}
 
-				if err != nil {
-					s = append(s, fmt.Sprintf("Cannot parse the link URL %v", u))
-					continue
-				}
+	for _, g := range grp {
+		h, err := highestRepeatingContainers(g)
 
-				h := conf.URL.Scheme + "://" + conf.URL.Host + u.Path
-				v[h] = LinkItem{
-					LinkURL: h,
-					Caption: t,
+		if err != nil {
+			messages <- err.Error()
+		}
+		for _, c := range h {
+
+			t, err := extractCaptionFromContainer(c.container, conf.ShortElementFilter)
+			if err != nil {
+				messages <- err.Error()
+				continue
+			}
+			for _, a := range c.link.Attr {
+				if a.Key == "href" {
+					u, err := url.Parse(a.Val)
+
+					if err != nil {
+						messages <- fmt.Sprintf("Cannot parse the link URL %v", u)
+						continue
+					}
+
+					h := conf.URL.Scheme + "://" + conf.URL.Host + u.Path
+					links <- LinkItem{
+						LinkURL: h,
+						Caption: t,
+					}
 				}
 			}
 		}
 	}
-
-	return v, s
-
+	close(links)
+	close(messages)
+	return
 }

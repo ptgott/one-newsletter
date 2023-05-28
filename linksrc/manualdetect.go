@@ -8,20 +8,21 @@ import (
 )
 
 // manuallyDetectLinkItems uses the configured link item, link, and caption
-// selectors to return a map of link URLs to LinkItems. Also returns a slice of
-// status messages to add to an email.
-func manuallyDetectLinkItems(n *html.Node, conf Config) (map[string]LinkItem, []string) {
-	s := []string{}
-	v := make(map[string]LinkItem)
-
+// selectors. Sends LinkItems and messages to add to an email to the provided
+// channels.
+func manuallyDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, messages chan string) {
 	if conf.ItemSelector == nil {
-		s = append(s, "Could not parse the link item selector.")
-		return v, s
+		messages <- "Could not parse the link item selector."
+		close(links)
+		close(messages)
+		return
 	}
 
 	if conf.LinkSelector == nil {
-		s = append(s, "Could not parse the link selector.")
-		return v, s
+		messages <- "Could not parse the link selector."
+		close(links)
+		close(messages)
+		return
 	}
 
 	// Get all items listing content to link to
@@ -30,22 +31,28 @@ func manuallyDetectLinkItems(n *html.Node, conf Config) (map[string]LinkItem, []
 	for i := range ls {
 		ns := conf.LinkSelector.MatchAll(ls[i])
 		if len(ns) > 1 {
-			s = append(s, "The link selector is ambiguous, so we couldn't parse any link items.")
-			return v, s
+			messages <- "The link selector is ambiguous, so we couldn't parse any link items."
+			close(links)
+			close(messages)
+			return
 		}
 		if len(ns) == 0 {
 			// If the link selector has no matches, this is likely
 			// true of other list items as well. Return an error
 			// so we can let the user know.
-			s = append(s, "There are no links in the list item. Double-check your configuration.")
-			return v, s
+			messages <- "There are no links in the list item. Double-check your configuration."
+			close(links)
+			close(messages)
+			return
 		}
 
 		if ns[0].Data != "a" {
 			// The link selector doesn't match a link. This is likely
 			// true of other list items, so let the user know.
-			s = append(s, fmt.Sprintf("The link selector does not match a link but rather %v.", ns[0].Data))
-			return v, s
+			messages <- fmt.Sprintf("The link selector does not match a link but rather %v.", ns[0].Data)
+			close(links)
+			close(messages)
+			return
 		}
 
 		// Find the href attribute of the link
@@ -59,15 +66,19 @@ func manuallyDetectLinkItems(n *html.Node, conf Config) (map[string]LinkItem, []
 		u, err := url.Parse(h)
 
 		if err != nil {
-			s = append(s, fmt.Sprintf("Cannot parse the link URL %v", u))
-			return v, s
+			messages <- fmt.Sprintf("Cannot parse the link URL %v", u)
+			close(links)
+			close(messages)
+			return
 		}
 
 		h = conf.URL.Scheme + "://" + conf.URL.Host + u.Path
 
 		if conf.CaptionSelector == nil {
-			s = append(s, "Could not parse the caption selector.")
-			return v, s
+			messages <- "Could not parse the caption selector."
+			close(links)
+			close(messages)
+			return
 		}
 
 		cs := conf.CaptionSelector.MatchAll(ls[i])
@@ -90,12 +101,14 @@ func manuallyDetectLinkItems(n *html.Node, conf Config) (map[string]LinkItem, []
 
 		}
 
-		v[h] = LinkItem{
+		links <- LinkItem{
 			LinkURL: h,
 			Caption: caption,
 		}
 	}
 
-	return v, s
+	close(links)
+	close(messages)
+	return
 
 }

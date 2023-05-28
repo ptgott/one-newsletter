@@ -9,6 +9,7 @@ import (
 	"github.com/ptgott/one-newsletter/scrape"
 	"github.com/ptgott/one-newsletter/userconfig"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -45,7 +46,21 @@ func main() {
 		false,
 		"run the scrapers once and (unless -noemail is present) send one email",
 	)
+	level := flag.String(
+		"level",
+		"info",
+		`log level: "info", "debug", or "warn"`,
+	)
 	flag.Parse()
+
+	switch *level {
+	case "debug":
+		log.Logger = log.Logger.Level(zerolog.DebugLevel)
+	case "warn":
+		log.Logger = log.Logger.Level(zerolog.WarnLevel)
+	default:
+		log.Logger = log.Logger.Level(zerolog.InfoLevel)
+	}
 
 	log.Info().
 		Str("configPath", *configPath).
