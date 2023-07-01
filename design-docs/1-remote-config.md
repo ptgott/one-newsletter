@@ -66,6 +66,23 @@ The disadvantge is that the web UI isn't friendly to version control.
 
 If the client CLI exists to make it esaire to authenticate to an HTTP API and
 serialize YAML, it would, of course, be possible to support bare HTTP calls, a
-web UI, and a CLI client. We can start with the CLI client because it's simpler
-than a web UI and more user friendly than bare HTTP calls.
+web UI, and a CLI client. 
 
+### Approach to start with
+
+We can start with the CLI client because it's simpler than a web UI and more
+user friendly than bare HTTP calls.
+
+## Architecture
+
+<!--TODO: Handling HTTPS: how to do ACME stuff-->
+<!--TODO: Handling authentication via the CLI app: how to get TOTP working-->
+<!--TODO: Specific API paths to write-->
+<!--TODO: How to handle consistency/versioning of the configuration. I.e.,
+should there be a timestamp field/should we save a last known version UUID of
+the configuration and compare that to the one of a recently applied config? Or
+just accept whatever config gets applied?-->
+<!--TODO: any other gotchas to look out for?-->
+<!--TODO: use a CLI framework like Cobra (or others) now that the CLI is getting
+more complex?-->
+<!--TODO: What's the MVP?-->
