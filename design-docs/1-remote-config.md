@@ -75,14 +75,93 @@ user friendly than bare HTTP calls.
 
 ## Architecture
 
-<!--TODO: Handling HTTPS: how to do ACME stuff-->
-<!--TODO: Handling authentication via the CLI app: how to get TOTP working-->
-<!--TODO: Specific API paths to write-->
+### Authentication
+
+Let's use SSO with Google for authentication since it's simple and more secure
+than anything I'd come up with!
+
+#### Keeping this a single-tenant app
+
+Add a field to the config file: `allow_email_addresses` (or similar): a list of
+email addresses to allow to authenticate via Google.
+
+#### Setting up SSO with Google
+
+https://developers.google.com/identity/gsi/web/guides/overview
+
+- "Sign in with Google is based on OAuth 2.0. The permissions that users granted
+  through Sign in with Google are the same as those that they grant for OAuth,
+  and vice versa."
+
+- Note that there are separate APIs for (a) authenticating to Google and (b)
+  obtaining information from a user's Google account. "To enforce this
+  separation, the authentication API can only return ID tokens which are used to
+  sign in to your website, whereas the authorization API can only return code or
+  access tokens which are used only for data access but not sign-in."
+
+https://developers.google.com/identity/gsi/web/guides/offerings
+
+- You can choose from a One Tap button, which supports automatic sign-in, and a
+  Sign In with Google button, which does not. In both cases, you can/should use
+  Google's code generator to produce JavaSCript that consumes the appropriate
+  API while following Google's guidelines.
+
+Here's a link to the code generator that produces HTML to embed into your
+website: https://developers.google.com/identity/gsi/web/tools/configurator
+
+To set up SSO with Google, visit the Google APIs page, then obtain a client ID
+and list authorized redirect URLs
+(https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid).
+Part of the process involves configuring the Google consent screen
+(https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid#configure_your_oauth_consent_screen),
+where you provide a logo for the app (as well as other information) to display
+on Google's site.
+
+When a user signs in via Google, Google sends an HTTP POST request to your login
+endpoint
+(https://developers.google.com/identity/gsi/web/guides/verify-google-id-token).
+- Google uses the double-submit cookie pattern to prevent CSRF. 
+- Use Google's public keys to verify Google's signature, making sure that you're
+  using the latest public keys (Google rotates these regularly).
+- Google recommends using its API client library
+  (https://developers.google.com/identity/gsi/web/guides/verify-google-id-token#using-a-google-api-client-library)
+  to validate its OAuth tokens.
+
+Note that Google also has a general-purpose OIDC library. Here's a breakdown of
+how to execute the "server flow" to authenticate a user:
+https://developers.google.com/identity/openid-connect/openid-connect#server-flow
+- Note that there's also an "implicit flow" that takes place in the browser.
+  This is a more complicated alternative to the server flow. In this case,
+  Google recomends using a Google Identity Services client library (see above).
+- It looks like there's a Go library for handling OAuth 2.0 communication with
+  Google APIs here: https://pkg.go.dev/golang.org/x/oauth2/google (double-check
+  that I can implement the server flow described above this way)
+- Note that an identity token's payload contains the email address of the
+  authenticated user, so it should be straightorward to check this against the
+  only allowable user if I add this as a configuration field.
+  (https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload)
+
+### Answering ACME challenges
+
+Which ACME challenge should we use?
+
+Per Let's Encrypt, TLS-ALPN-01 is "is best suited to authors of TLS-terminating
+reverse proxies that want to perform host-based validation like HTTP-01, but
+want to do it entirely at the TLS layer in order to separate concerns"
+(https://letsencrypt.org/docs/challenge-types/#tls-alpn-01)
+
+Let's use HTTP-01, the most common challenge type. There's a Go library that
+implements HTTP-01 (and other challenges:
+https://pkg.go.dev/golang.org/x/crypto/acme)
+
+
+<!--TODO: use a CLI framework like Cobra (or others) now that the CLI is getting
+more complex?-->
+<!--TODO: Specific API paths to write. Note that these should support ACME
+HTTP-01 and Google's OAuth 2.0 flow.-->
 <!--TODO: How to handle consistency/versioning of the configuration. I.e.,
 should there be a timestamp field/should we save a last known version UUID of
 the configuration and compare that to the one of a recently applied config? Or
 just accept whatever config gets applied?-->
 <!--TODO: any other gotchas to look out for?-->
-<!--TODO: use a CLI framework like Cobra (or others) now that the CLI is getting
-more complex?-->
 <!--TODO: What's the MVP?-->
