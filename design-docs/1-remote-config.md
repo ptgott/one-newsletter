@@ -154,9 +154,17 @@ Let's use HTTP-01, the most common challenge type. There's a Go library that
 implements HTTP-01 (and other challenges:
 https://pkg.go.dev/golang.org/x/crypto/acme)
 
+### Using a CLI framework?
 
-<!--TODO: use a CLI framework like Cobra (or others) now that the CLI is getting
-more complex?-->
+Looks like the two big ones are:
+
+- https://github.com/spf13/cobra
+- https://github.com/alecthomas/kong
+
+Let's go with `cobra` since it's older and, really, a classic Go library.
+Looking at both libraries, there didn't seem to be enough of a difference to
+choose `kong` over its more venerable counterpart.
+
 <!--TODO: Specific API paths to write. Note that these should support ACME
 HTTP-01 and Google's OAuth 2.0 flow.-->
 <!--TODO: How to handle consistency/versioning of the configuration. I.e.,
