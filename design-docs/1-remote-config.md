@@ -156,20 +156,44 @@ https://pkg.go.dev/golang.org/x/crypto/acme)
 
 ### Using a CLI framework?
 
-Looks like the two big ones are:
+Now that the One Newsletter binary will support commands to run on both the
+server and the client, we should handle the extra complexity (e.g., subcommands)
+with a CLI framework.
 
-- https://github.com/spf13/cobra
-- https://github.com/alecthomas/kong
+Let's go with `cobra` since it's one of the oldest ones and a classic,
+well-tested Go library with a big community. Looking at both `cobra` and
+`alecthomas/kong`, a CLI library with a recent following, there didn't seem to
+be enough of a difference to choose `kong` over its more venerable counterpart.
 
-Let's go with `cobra` since it's older and, really, a classic Go library.
-Looking at both libraries, there didn't seem to be enough of a difference to
-choose `kong` over its more venerable counterpart.
+### Applying configurations
 
-<!--TODO: Specific API paths to write. Note that these should support ACME
-HTTP-01 and Google's OAuth 2.0 flow.-->
-<!--TODO: How to handle consistency/versioning of the configuration. I.e.,
-should there be a timestamp field/should we save a last known version UUID of
-the configuration and compare that to the one of a recently applied config? Or
-just accept whatever config gets applied?-->
-<!--TODO: any other gotchas to look out for?-->
-<!--TODO: What's the MVP?-->
+#### On the client side
+
+An `apply` command takes a mandatory argument whose value is the path to a
+configuration file. The command does the following:
+
+- Initiates the Google OAuth 2.0 authentication flow and retrieves a token.
+- Reads the `link_sources` section of named config file.
+- Serializes the configuration data and signs the payload with the token.
+- Sends the request to the backend, `POST`ing to `/api/v1/config/`.
+
+#### On the server side
+
+Configuration ingestion will involve a single API path, `/api/v1/config`, which
+only supports the `POST` method. It:
+
+- Verifies the token and that the token signed the payload,
+  authenticating/authorizing the user.
+- Uses sqlite to load a config file from disk if it already exists.
+- Replaces the old config with the new config, writing it to disk via sqlite.
+
+This will involve:
+
+- Using sqlite
+- Adding a server-side configuration option for where to put the sqlite
+  database. Currently the only configuration option for a storage file path is
+  `scraping.storageDir`.
+
+It's much simpler to override all configuration options than to support more
+sophisticating configuration merge logic. We can start with this approach, then
+see what problems arise.
