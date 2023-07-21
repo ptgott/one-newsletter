@@ -14,6 +14,7 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/rs/zerolog v1.20.0
+	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/stretchr/testify v1.6.1 // indirect
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	gonum.org/v1/gonum v0.9.1
