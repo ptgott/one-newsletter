@@ -20,7 +20,6 @@ const (
 // delete the file at $relativeGoldenHTMLFilePath before running this test. Edits
 // to the golden file should be checked into version control.
 func TestGenerateBody(t *testing.T) {
-
 	ed := EmailData{
 		mtx: &sync.Mutex{},
 		content: []BodySectionContent{

@@ -725,12 +725,13 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 		t.Fatalf("expected to receive zero emails but got %v", ems)
 	}
 
-	o, err := io.ReadAll(&msg)
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(&msg)
 	if err != nil {
 		t.Fatalf("could not read from the command output: %v", err)
 	}
 
-	links := smtptest.ExtractItems(string(o))
+	links := smtptest.ExtractItems(buf.String())
 	if len(links) != epubs*linksPerPub {
 		t.Errorf(
 			"expecting %v links via stdout, but got %v",
