@@ -9,6 +9,6 @@ func ExtractItems(body string) []string {
 	if body == "" {
 		return []string{}
 	}
-	linkPattern := regexp.MustCompile("<p>.*\\(<a href=\".*\">.*</a>\\)</p>")
+	linkPattern := regexp.MustCompile("<li>.*\\(<a href=\".*\">.*</a>\\)</li>")
 	return linkPattern.FindAllString(body, -1)
 }

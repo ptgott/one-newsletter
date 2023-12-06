@@ -32,9 +32,8 @@ func NewBodySectionContent(s linksrc.Set) BodySectionContent {
 		return bsc
 	}
 
-	bsc.Overview = "Here are the latest links:"
+	bsc.Overview = ""
 	return bsc
-
 }
 
 // Template meant to be populated with a []linksrc.Set
@@ -45,18 +44,16 @@ const emailBodyHTML = `<html>
 <head>
 </head>
 <body>
-	<table>
-		<tbody>
-			<h1>Here are some new links!</h1>
-			{{ range . }}
-				<h2>{{ .PubName }}</h2>
-				<p>{{ .Overview }}</p>
-				{{ range .Items }}
-					<p>{{ .Caption }} (<a href="{{ .LinkURL }}">here</a>)</p>
-				{{ end }}
-			{{ end }}
-		</tbody>
-	</table>
+	<p>One Newsletter found the following links.</p>
+	{{ range . }}
+		<h2>{{ .PubName }}</h2>
+		<p>{{ .Overview }}</p>
+		<ul>
+		{{ range .Items }}
+			<li>{{ .Caption }} (<a href="{{ .LinkURL }}">here</a>)</li>
+		{{ end }}
+		</ul>
+	{{ end }}
 </body>
 </html>`
 
