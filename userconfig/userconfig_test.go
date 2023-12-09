@@ -231,7 +231,7 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 			input: Scraping{
 				Interval: mustParseDuration("5s"),
 				OneOff:   false,
-				NoEmail:  false,
+				TestMode: false,
 			},
 			expected:           Scraping{},
 			expectErrSubstring: "path",
@@ -240,7 +240,7 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 			description: "no interval",
 			input: Scraping{
 				OneOff:         false,
-				NoEmail:        false,
+				TestMode:       false,
 				StorageDirPath: "/storage",
 			},
 			expected:           Scraping{},
@@ -250,7 +250,7 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 			description: "interval less than 5s",
 			input: Scraping{
 				OneOff:         false,
-				NoEmail:        false,
+				TestMode:       false,
 				StorageDirPath: "/storage",
 				Interval:       mustParseDuration("100ms"),
 			},

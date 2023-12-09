@@ -34,22 +34,22 @@ func main() {
 	configPath := flag.String(
 		"config",
 		"./config.yaml",
-		"path to a JSON or YAML file containing your configuration",
+		"Path to a JSON or YAML file containing your configuration.",
 	)
-	noEmail := flag.Bool(
-		"noemail",
+	testMode := flag.Bool(
+		"test",
 		false,
-		"print email body HTML to stdout instead of sending it",
+		"Print the HTML body of a single email to stdout and exit without sending it to test a configuration locally. Does not require an SMTP configuration or database.",
 	)
 	oneOff := flag.Bool(
 		"oneoff",
 		false,
-		"run the scrapers once and (unless -noemail is present) send one email",
+		"Run the scrapers and send a single email. Used for testing a live One Newsletter deployment. Does not touch the database.",
 	)
 	level := flag.String(
 		"level",
-		"info",
-		`log level: "info", "debug", or "warn"`,
+		"",
+		`log level: "error", "info", "debug", or "warn"`,
 	)
 	flag.Parse()
 
@@ -58,8 +58,18 @@ func main() {
 		log.Logger = log.Logger.Level(zerolog.DebugLevel)
 	case "warn":
 		log.Logger = log.Logger.Level(zerolog.WarnLevel)
-	default:
+	case "error":
+		log.Logger = log.Logger.Level(zerolog.ErrorLevel)
+	case "info":
 		log.Logger = log.Logger.Level(zerolog.InfoLevel)
+	default:
+		// Disable logging in test mode unless the user provides the
+		// "level" flag.
+		if *testMode {
+			log.Logger = log.Logger.Level(zerolog.Disabled)
+		} else {
+			log.Logger = log.Logger.Level(zerolog.InfoLevel)
+		}
 	}
 
 	log.Info().
@@ -85,7 +95,7 @@ func main() {
 		os.Exit(1)
 	}
 	config.Scraping.OneOff = *oneOff
-	config.Scraping.NoEmail = *noEmail
+	config.Scraping.TestMode = *testMode
 
 	checkedConfig, err := config.CheckAndSetDefaults()
 	if err != nil {
@@ -100,23 +110,10 @@ func main() {
 	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 	scrapeConfig := scrape.Config{
 		TickCh:   scrapeCadence.C,
-		ErrCh:    make(chan error), // errors to print
-		OutputWr: os.Stdout,        // write to stdout if the -no-email flag is given
-		StopCh:   nil,              // since we simply exit on a SIGINT
+		OutputWr: os.Stdout, // write to stdout if the -no-email flag is given
 	}
 
-	go scrape.StartLoop(&scrapeConfig, &checkedConfig)
-
-	// At this point, the main goroutine blocks until there's an error
-	for {
-		err, ok := <-scrapeConfig.ErrCh
-		// There's no need for the error channel anymore, so we stop
-		// looping and let the rest of the program complete.
-		if !ok {
-			break
-		} else {
-			log.Error().Err(err).Msg("error gathering links to email")
-		}
+	if err := scrape.StartLoop(&scrapeConfig, &checkedConfig); err != nil {
+		log.Error().Err(err).Msg("error gathering links to email")
 	}
-
 }

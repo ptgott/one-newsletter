@@ -17,14 +17,13 @@ import (
 type Config struct {
 	// For time.Ticker ticks
 	TickCh <-chan time.Time
-	// Channel to send errors to
-	ErrCh chan error
-	// Channel for stopping the scraper
-	StopCh chan struct{}
 	// Writer for a message to display when a scrape has finished.The means
 	// of display is controlled by the caller. Intended for email text shown
 	// when the --noemail flag is used.
 	OutputWr io.Writer
+	// Number of rounds of scraping and emailing to perform before stopping
+	// the scraper. Used for testing.
+	IterationLimit uint
 }
 
 // Run conducts a single scrape and email cycle and returns the first error
@@ -32,7 +31,6 @@ type Config struct {
 // the end of a scrape cycle, it sends an email or, depending on the config,
 // writes a plaintext version of the email message to outwr.
 func Run(outwr io.Writer, config *userconfig.Meta) error {
-
 	httpClient := http.Client{
 		// Determined arbitrarily. We don't want to wait forever for a
 		// request to complete, but the cadence of the newsletter means
@@ -41,7 +39,7 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 	}
 
 	var db storage.KeyValue
-	if config.Scraping.NoEmail || config.Scraping.OneOff {
+	if config.Scraping.TestMode || config.Scraping.OneOff {
 		db = &storage.NoOpDB{}
 	} else {
 		var err error
@@ -161,7 +159,7 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 	txt := d.GenerateText()
 	log.Info().Msg("attempting to send an email")
 
-	if config.Scraping.NoEmail {
+	if config.Scraping.TestMode {
 		if outwr == nil {
 			log.Warn().Msg(
 				"a writer is unavailable for receiving the output message",
@@ -179,53 +177,49 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 		}
 	}
 
-	// We're only doing this once, so get out of the main loop
-	if config.Scraping.OneOff {
-		return nil
-	}
 	return nil
-
 }
 
 // StartLoop begins the main sequence of scraping websites for links every
 // interval (defined by tc) with the provided config. If an s.ErrCh is provided,
 // sends any errors to it. Send a struct{} to sc to stop the scraper.
-func StartLoop(s *Config, c *userconfig.Meta) {
-
-	// The first email will be sent after the scrape interval
-	// TODO: This should send the first email immediately instead.
-	if !c.Scraping.OneOff {
-		<-s.TickCh
-	}
-
+func StartLoop(s *Config, c *userconfig.Meta) error {
 	// Run the first scrape immediately
 	err := Run(s.OutputWr, c)
-	// Make a weak effort to send any errors encountered to the provided
-	// error channel. If there are no receivers,
 	if err != nil {
-		select {
-		case s.ErrCh <- err:
-		default:
-		}
-
+		return err
 	}
 
-	// enter the main scraping/email sending loop
-	for !c.Scraping.OneOff {
-		select {
-		case <-s.StopCh:
-			return
-		case <-s.TickCh:
-			go func(io.Writer, *Config) {
-				err := Run(s.OutputWr, c)
-				if err != nil {
-					select {
-					case s.ErrCh <- err:
-					default:
-					}
-				}
-			}(s.OutputWr, s)
-		}
+	// Only running the loop once
+	if c.Scraping.OneOff || c.Scraping.TestMode {
+		return nil
+	}
 
+	// Implement the iteration limit by replacing the tick channel with a
+	// buffered channel pre-loaded with ticks.
+	if s.IterationLimit > 0 {
+		ch := make(chan (time.Time), s.IterationLimit)
+		for i := uint(0); i < s.IterationLimit; i++ {
+			ch <- time.Time{}
+		}
+		s.TickCh = ch
+	}
+
+	for {
+		select {
+		case <-s.TickCh:
+			err := Run(s.OutputWr, c)
+			if err != nil {
+				return err
+			}
+		default:
+			// If we run out of ticks, it's either because we're waiting
+			// for more ticks or there's an iteration limit and we've
+			// run through all the iterations.
+			if s.IterationLimit > 0 {
+				return nil
+			}
+			continue
+		}
 	}
 }

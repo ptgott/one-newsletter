@@ -173,17 +173,18 @@ check the results against past results, and send an email containing the new
 links. You can alter this behavior with the following flags:
 
 - `-oneoff`: Carry out a single scrape and send a single email. Since One
- Newsletter only saves the results of a scrape in order to carry out repeated
- checks, this flag also stops it from saving results to the database. Useful if
- you want to try out One Newsletter without waiting.
+  Newsletter only saves the results of a scrape in order to carry out repeated
+  checks, this flag also stops it from saving results to the database. Useful if
+  you want to try out One Newsletter in a "live" environment without waiting.
 
-- `-noemail`: Print an email's HTML to standard output rather than sending it.
- You can then redirect the HTML to a file of your choice or just read it from
- the terminal. Useful if you would like to run this on your local machine.
+- `-test`: Print an email's HTML to standard output rather than sending it.
+  Exits after the first email. You can then redirect the HTML to a file of your
+  choice or just read it from the terminal. Useful for testing your
+  configuration. Does not require any database or SMTP server configuration.
 
-You can use the `-oneoff` and `-noemail` flags together for a quick
-configuration check. One Newsletter will print the results of a scrape to your
-terminal without sending an email.
+- `-level`: The level of logs to show. Can be `error`, `info`, `debug`, or
+  `warn`. `info` by default. If you are using the `-test` flag, logging is
+  disabled unless you specify a level.
 
 ### How automatic link item detection works
 

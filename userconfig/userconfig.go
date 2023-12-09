@@ -34,8 +34,9 @@ type Scraping struct {
 	StorageDirPath string
 	// Run the scraper once, then exit
 	OneOff bool
-	// Print email text to stdout to help test configuration
-	NoEmail bool
+	// Print the HTML body of a single email to stdout and exit to help test
+	// configuration.
+	TestMode bool
 }
 
 // CheckAndSetDefaults validates s and either returns a copy of s with default
@@ -155,7 +156,7 @@ func Parse(r io.Reader) (*Meta, error) {
 
 	// Since this is a one-off or a test, set the data directory to an
 	// empty string to disable database operations.
-	if m.Scraping.OneOff || m.Scraping.NoEmail {
+	if m.Scraping.OneOff || m.Scraping.TestMode {
 		m.Scraping.StorageDirPath = ""
 		log.Debug().Msg(
 			"disabling database operations",

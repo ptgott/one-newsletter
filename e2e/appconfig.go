@@ -28,7 +28,7 @@ type appConfigOptions struct {
 	// Required
 	PollInterval string
 	OneOff       bool
-	NoEmail      bool
+	TestMode     bool
 }
 
 // mockLinksrcInfo contains metadata about test HTTP servers so we can use it
@@ -83,7 +83,7 @@ func createUserConfig(opts appConfigOptions) (userconfig.Meta, error) {
 			Interval:       v,
 			StorageDirPath: opts.StorageDir,
 			OneOff:         opts.OneOff,
-			NoEmail:        opts.NoEmail,
+			TestMode:       opts.TestMode,
 		},
 	}
 
