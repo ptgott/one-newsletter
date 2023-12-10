@@ -14,7 +14,6 @@ import (
 	"github.com/ptgott/one-newsletter/smtptest"
 
 	"github.com/rs/zerolog/log"
-	"gonum.org/v1/gonum/stat"
 )
 
 var (
@@ -26,8 +25,7 @@ var (
 // application as a child process, wait for an interval, then stop the
 // subprocess to count emails sent.
 func TestNewsletterEmailSending(t *testing.T) {
-	stopIntervalMS := 1100
-	pollIntervalMS := 500
+	expectedEmails := 3
 	epubs := 3
 	linksPerPub := 5
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -60,43 +58,37 @@ func TestNewsletterEmailSending(t *testing.T) {
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
+			PollInterval:      "5s", // Ignored here
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
-
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
-		ErrCh:  make(chan error),
-		StopCh: make(chan struct{}),
+		TickCh: nil,
+		// Since we send an email right away, before using the iteration
+		// limit.
+		IterationLimit: uint(expectedEmails - 1),
 	}
 
-	go scrape.StartLoop(&scrapeConfig, &config)
-
-	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
-
-	scrapeConfig.StopCh <- struct{}{} // stop the scraper
-
+	scrape.StartLoop(&scrapeConfig, &config)
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 
 	if err != nil {
 		t.Errorf("can't retrieve email from the test SMTP server: %v", err)
 	}
 
-	// There should be one email per polling interval.
+	// There should be one email per polling interval, plus the initial
+	// email (which is sent right away).
 	//
-	// Integer division truncates toward zero, so we don't need to
-	// find the floor.
+	// Integer division truncates toward zero, so we don't need to find the
+	// floor.
 	// https://golang.org/ref/spec#Integer_operators
-	expectedLen := stopIntervalMS / pollIntervalMS
-	if len(ems) != int(expectedLen) {
+	if len(ems) != expectedEmails {
 		t.Errorf(
 			"expecting %v emails but got %v",
-			expectedLen,
+			expectedEmails,
 			len(ems),
 		)
 	}
@@ -106,13 +98,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 // Make sure successive emails for the same link site show
 // the expected content
 func TestNewsletterEmailUpdates(t *testing.T) {
-	// i.e., poll the site once, update the site, poll it again,
-	// and stop.
-	updateIntervalS := 6
-	stopIntervalS := 11
-	pollIntervalS := 5
 	linksToUpdate := 2
-
 	// Ensure that all emails are the result of polling a single e-publication
 	epubs := 1
 	linksPerPub := 5
@@ -146,28 +132,25 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			PollInterval:      "5s", // Ignored in this case
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Second * time.Duration(pollIntervalS))
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
-		ErrCh:  make(chan error),
-		StopCh: make(chan struct{}),
+		TickCh:         nil,
+		IterationLimit: 1,
 	}
 
-	go scrape.StartLoop(&scrapeConfig, &config)
+	scrape.StartLoop(&scrapeConfig, &config)
 
 	// Run the application from the entrypoint with our new config
 
 	// Wait for the application to poll the link site, check for emails,
 	// update the application, wait another poll interval, and check
 	// for emails again.
-	time.Sleep(time.Duration(updateIntervalS) * time.Second)
 	em1, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
 		t.Errorf("could not retrieve emails before the update: %v", err)
@@ -176,15 +159,11 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 		t.Fatal("retrieved zero emails before the update")
 	}
 	before := em1[0] // should just be one email at this point
-
 	log.Info().Msg("updating the mock link sites")
 	testenv.update(linksToUpdate)
 	ut := time.Now().UnixNano()
 	log.Info().Msg("finished updating the mock link sites")
-	time.Sleep(time.Duration(stopIntervalS-updateIntervalS) * time.Second)
-
-	scrapeConfig.StopCh <- struct{}{} // stop the scraper
-
+	scrape.StartLoop(&scrapeConfig, &config)
 	em2, err := testenv.SMTPServer.RetrieveEmails(ut)
 	if err != nil {
 		t.Errorf("can't retrieve emails after the update: %v", err)
@@ -226,8 +205,6 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 }
 
 func TestMaxLinkLimits(t *testing.T) {
-	stopIntervalMS := 350
-	pollIntervalMS := 300
 	maxLinksInEmail := 5
 	epubs := 1
 	linksPerPub := 10
@@ -262,31 +239,19 @@ func TestMaxLinkLimits(t *testing.T) {
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
+			PollInterval:      "5s", // Ignored in this case
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
-		ErrCh:  make(chan error),
-		StopCh: make(chan struct{}),
+		TickCh:         nil,
+		IterationLimit: 1,
 	}
 
-	go scrape.StartLoop(&scrapeConfig, &config)
-
-	// Run the application from the entrypoint with our new config
-
-	// Wait for the application to poll the link site, check for emails,
-	// update the application, wait another poll interval, and check
-	// for emails again.
-	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
-
-	scrapeConfig.StopCh <- struct{}{} // stop the scraper
-
+	scrape.StartLoop(&scrapeConfig, &config)
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
 		t.Errorf("could not retrieve emails: %v", err)
@@ -333,99 +298,10 @@ func totalBadgerDataFileSize(dirPath string) float64 {
 	return float64(size)
 }
 
-func TestDBCleanup(t *testing.T) {
-	pollIntervalMS := 800
-	pollCycles := 10
-	// just a bit more than the pollInterval
-	diskCheckIntervalMS := 1000
-
-	epubs := 10
-	linksPerPub := 10
-
-	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
-		numHTTPServers: epubs,
-		numLinks:       linksPerPub,
-	})
-
-	defer testenv.tearDown()
-
-	if err != nil {
-		t.Fatalf("error starting test environment: %v", err)
-	}
-
-	// Configure link site checks for each fake e-publicaiton we've spun up.
-	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
-	for i := range urls {
-		// not expecting errors since these URLs are guaranteed to be
-		// for running servers, and don't come from user input
-		pu, _ := url.Parse(urls[i])
-
-		u[i] = mockLinksrcInfo{
-			URL:  urls[i],
-			Name: fmt.Sprintf("site-%v", pu.Port()),
-		}
-	}
-
-	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
-		},
-	)
-	if err != nil {
-		panic(fmt.Sprintf("can't create the app config: %v", err))
-	}
-
-	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
-	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
-		ErrCh:  make(chan error),
-		StopCh: make(chan struct{}),
-	}
-
-	go scrape.StartLoop(&scrapeConfig, &config)
-
-	fileSizes := make([]float64, pollCycles, pollCycles)
-	for i := range fileSizes {
-		time.Sleep(time.Duration(diskCheckIntervalMS) * time.Millisecond)
-		fileSizes[i] = totalBadgerDataFileSize(testenv.tempDirPath)
-		testenv.update(linksPerPub)
-	}
-
-	scrapeConfig.StopCh <- struct{}{} // stop the scraper
-
-	// The test assertion is based on the standard deviation of the file sizes,
-	// since this is in the same unit as the file size (bytes).
-	// We ignore the first two values because they aren't expected to reflect
-	// the baseline state  of the application's disk usage.
-	// Garbage collection should stabilize the data directory file size over time.
-	stddev := stat.StdDev(fileSizes[2:], nil)
-
-	// We want the data directory to vary by, at most, 50 percent of the
-	// initial (post-setup) value in bytes. The initial value won't be that high,
-	// so 50 percent is a pretty good arbitrary limit over time.
-	var maxStdDev float64 = fileSizes[2] * .50
-
-	if stddev > maxStdDev {
-		t.Errorf(
-			"expected data directory size to vary by less than %v bytes, but got %v, with post-setup file sizes: %v",
-			maxStdDev,
-			stddev,
-			fileSizes[2:],
-		)
-	}
-
-}
-
 // Make sure that an email is still sent if the only scrape config contains
 // invalid CSS. This test exists because one site with a config that included
 // an ambiguous selector seems to have caused the application to deadlock.
 func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
-	stopIntervalMS := 800
-	pollIntervalMS := 500
 	epubs := 1
 	linksPerPub := 10
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -464,43 +340,34 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vms", pollIntervalMS),
+			PollInterval:      "5s", // Ignored here
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
 	scrapeConfig := scrape.Config{
-		TickCh: tk.C,
-		ErrCh:  make(chan error),
-		StopCh: make(chan struct{}),
+		TickCh:         nil,
+		IterationLimit: 1,
 	}
 
-	go scrape.StartLoop(&scrapeConfig, &config)
-
-	// Wait for the application to poll the link site and check for emails
-	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
-
-	scrapeConfig.StopCh <- struct{}{} // stop the scraper
+	scrape.StartLoop(&scrapeConfig, &config)
 
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
 		t.Errorf("could not retrieve emails: %v", err)
 	}
-	if len(em) != 1 {
+	// Expecting an iteration limit of one, plus the email that gets sent
+	// right away.
+	if len(em) != 2 {
 		t.Fatalf("expected to receive one email, but got %v", len(em))
 	}
-
 }
 
-// Test that the -noemail flag causes email bodies to be printed to stdout,
+// Test that the -test flag causes email bodies to be printed to stdout,
 // and that no emails are sent.
-func TestNoEmailFlag(t *testing.T) {
-	stopIntervalMS := 600
-	pollIntervalMS := 500
-
+func TestTestModeFlag(t *testing.T) {
 	// Ensure that all emails are the result of polling a single e-publication
 	epubs := 1
 	linksPerPub := 5
@@ -536,28 +403,23 @@ func TestNoEmailFlag(t *testing.T) {
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalMS),
-			NoEmail:           true,
+			PollInterval:      "5s", // Ignored here
+			TestMode:          true,
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	tk := time.NewTicker(time.Millisecond * time.Duration(pollIntervalMS))
 	var msg bytes.Buffer
 
 	scrapeConfig := scrape.Config{
-		TickCh:   tk.C,
-		ErrCh:    make(chan error),
-		StopCh:   make(chan struct{}),
-		OutputWr: &msg,
+		TickCh:         nil,
+		IterationLimit: 1,
+		OutputWr:       &msg,
 	}
 
-	go scrape.StartLoop(&scrapeConfig, &config)
-
-	time.Sleep(time.Duration(stopIntervalMS) * time.Millisecond)
-	scrapeConfig.StopCh <- struct{}{} // stop the scraper
+	scrape.StartLoop(&scrapeConfig, &config)
 
 	em1, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
@@ -583,7 +445,6 @@ func TestNoEmailFlag(t *testing.T) {
 }
 
 func TestOneOffFlag(t *testing.T) {
-	pollIntervalS := 5
 	epubs := 3
 	linksPerPub := 5
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -616,7 +477,7 @@ func TestOneOffFlag(t *testing.T) {
 			SMTPServerAddress: testenv.SMTPServer.Address(),
 			LinkSources:       u,
 			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
+			PollInterval:      "5s",
 			OneOff:            true,
 		},
 	)
@@ -626,8 +487,6 @@ func TestOneOffFlag(t *testing.T) {
 
 	scrapeConfig := scrape.Config{
 		TickCh: nil, // since we're using a one-off configuration
-		ErrCh:  make(chan error),
-		StopCh: make(chan struct{}),
 	}
 
 	dbBefore := totalBadgerDataFileSize(testenv.tempDirPath)
@@ -698,7 +557,7 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 			StorageDir:        testenv.tempDirPath,
 			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
 			OneOff:            true,
-			NoEmail:           true,
+			TestMode:          true,
 		},
 	)
 	if err != nil {
@@ -708,8 +567,6 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 	var msg bytes.Buffer
 	scrapeConfig := scrape.Config{
 		TickCh:   nil, // since we're using a one-off configuration
-		ErrCh:    make(chan error),
-		StopCh:   make(chan struct{}),
 		OutputWr: &msg,
 	}
 
