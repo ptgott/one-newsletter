@@ -84,6 +84,61 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
+			name: "links with different hostnames: manual",
+			html: mustReadFile(path.Join("testdata", "mixed-hostnames.html"), t),
+			conf: Config{
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				ItemSelector:       css.MustCompile("body div#mostRead ol li"),
+				CaptionSelector:    css.MustCompile("div a.itemName"),
+				LinkSelector:       css.MustCompile("div a.itemName"),
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "My Cool Publication",
+				items: map[string]LinkItem{
+					"http://subdomain1.example.com/stories/hot-take": {
+						LinkURL: "http://subdomain1.example.com/stories/hot-take",
+						Caption: "This is a hot take!",
+					},
+					"http://subdomain2.example.com/stories/stuff-happened": {
+						LinkURL: "http://subdomain2.example.com/stories/stuff-happened",
+						Caption: "Stuff happened today, yikes.",
+					},
+					"http://www.example.com/storiesreally-true": {
+						LinkURL: "http://www.example.com/storiesreally-true",
+						Caption: "Is this supposition really true?",
+					},
+				},
+			},
+		},
+		{
+			name: "links with different hostnames: automatic",
+			html: mustReadFile(path.Join("testdata", "mixed-hostnames.html"), t),
+			conf: Config{
+				Name:               "My Cool Publication",
+				URL:                mustParseURL("http://www.example.com"),
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "My Cool Publication",
+				items: map[string]LinkItem{
+					"http://subdomain1.example.com/stories/hot-take": {
+						LinkURL: "http://subdomain1.example.com/stories/hot-take",
+						Caption: "This is a hot take!",
+					},
+					"http://subdomain2.example.com/stories/stuff-happened": {
+						LinkURL: "http://subdomain2.example.com/stories/stuff-happened",
+						Caption: "Stuff happened today, yikes.",
+					},
+					"http://www.example.com/storiesreally-true": {
+						LinkURL: "http://www.example.com/storiesreally-true",
+						Caption: "Is this supposition really true?",
+					},
+				},
+			},
+		},
+		{
 			name: "canonical/intended case with relative link URLs",
 			html: mustReadFile(path.Join("testdata", "straightforward-relative-links.html"), t),
 			conf: Config{

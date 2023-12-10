@@ -72,8 +72,6 @@ func manuallyDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, mes
 			return
 		}
 
-		h = conf.URL.Scheme + "://" + conf.URL.Host + u.Path
-
 		if conf.CaptionSelector == nil {
 			messages <- "Could not parse the caption selector."
 			close(links)
@@ -102,7 +100,7 @@ func manuallyDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, mes
 		}
 
 		links <- LinkItem{
-			LinkURL: h,
+			LinkURL: getDisplayURL(conf.URL, *u),
 			Caption: caption,
 		}
 	}

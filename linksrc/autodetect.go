@@ -423,26 +423,25 @@ func autoDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, message
 			messages <- err.Error()
 		}
 		for _, c := range h {
-
 			t, err := extractCaptionFromContainer(c.container, conf.ShortElementFilter)
 			if err != nil {
 				messages <- err.Error()
 				continue
 			}
 			for _, a := range c.link.Attr {
-				if a.Key == "href" {
-					u, err := url.Parse(a.Val)
+				if a.Key != "href" {
+					continue
+				}
+				u, err := url.Parse(a.Val)
 
-					if err != nil {
-						messages <- fmt.Sprintf("Cannot parse the link URL %v", u)
-						continue
-					}
+				if err != nil {
+					messages <- fmt.Sprintf("Cannot parse the link URL %v", u)
+					continue
+				}
 
-					h := conf.URL.Scheme + "://" + conf.URL.Host + u.Path
-					links <- LinkItem{
-						LinkURL: h,
-						Caption: t,
-					}
+				links <- LinkItem{
+					LinkURL: getDisplayURL(conf.URL, *u),
+					Caption: t,
 				}
 			}
 		}
