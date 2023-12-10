@@ -6,7 +6,6 @@ import (
 )
 
 func TestLinkItem_Key(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		LinkItem LinkItem

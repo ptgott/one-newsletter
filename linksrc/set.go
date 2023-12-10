@@ -5,12 +5,27 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"golang.org/x/net/html"
 )
+
+// getDisplayURL determines how to display a URL found in a link within the
+// newsletter email. It uses the hostname found in the link within the link
+// source. If that's not available because the link is relative, it uses the
+// configured URL for the link source.
+func getDisplayURL(configURL, linkURL url.URL) string {
+	var host string
+	if linkURL.Host == "" {
+		host = configURL.Host
+	} else {
+		host = linkURL.Host
+	}
+	return configURL.Scheme + "://" + host + linkURL.Path
+}
 
 // NewSet initializes a new collection of listed link items for an HTML
 // document Reader, link source configuration, and HTTP status code (which
