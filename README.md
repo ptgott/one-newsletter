@@ -72,10 +72,15 @@ don't be a jerk.)
 Newsletter keeps track of URLs it has already included in the newsletter so you
 don't get repeat content. It stores URLs from the last two polling intervals.
 
+`linkExpiryDays` indicates how many days One Newsletter will store the URLs of
+links it has collected in the database. When One Newsletter collects a link, it
+checks the link against the database to determine whether to email it to you.
+
 ```yaml
 scraping:
   interval: 168h # every seven days
   storageDir: ./tempTestDir3012705204
+  linkExpiryDays: 100
 ```
 
 The `link_sources` section tells One Newsletter how to scrape websites for

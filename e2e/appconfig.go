@@ -18,6 +18,7 @@ import (
 // YAML/JSON-compatible types only here.
 //
 // Fields are exported so we can use them in templates.
+// TODO: No reason to keep this around anymore. Use the regular config instead.
 type appConfigOptions struct {
 	// Required. Includes host and port.
 	SMTPServerAddress string
@@ -84,6 +85,7 @@ func createUserConfig(opts appConfigOptions) (userconfig.Meta, error) {
 			StorageDirPath: opts.StorageDir,
 			OneOff:         opts.OneOff,
 			TestMode:       opts.TestMode,
+			LinkExpiryDays: 180,
 		},
 	}
 
