@@ -2,11 +2,12 @@ package userconfig
 
 import (
 	"bytes"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"gopkg.in/yaml.v2"
 )
@@ -168,34 +169,54 @@ scraping:
 
 }
 
+func mustParseDuration(s string, t *testing.T) time.Duration {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
 func TestScrapingUnmarshalYAML(t *testing.T) {
 	testCases := []struct {
 		description   string
 		input         string
 		shouldBeError bool
+		expected      Scraping
 	}{
 		{
 			description:   "valid case",
 			shouldBeError: false,
 			input: `storageDir: ./tempTestDir3012705204
-interval: 5s`,
+interval: 5s
+linkExpiryDays: 100`,
+			expected: Scraping{
+				Interval:       mustParseDuration("5s", t),
+				StorageDirPath: "./tempTestDir3012705204",
+				OneOff:         false,
+				TestMode:       false,
+				LinkExpiryDays: 100,
+			},
 		},
 		{
 			description:   "not an object",
 			shouldBeError: true,
 			input:         `[]`,
+			expected:      Scraping{},
 		},
 		{
 			description:   "unparseable duration",
 			shouldBeError: true,
 			input: `interval: 5y
 storageDir: ./tempTestDir3012705204`,
+			expected: Scraping{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			var s Scraping
+			empty := Scraping{}
 			if err := yaml.NewDecoder(
 				bytes.NewBuffer([]byte(tc.input)),
 			).Decode(&s); (err != nil) != tc.shouldBeError {
@@ -205,17 +226,11 @@ storageDir: ./tempTestDir3012705204`,
 					err,
 				)
 			}
+			if tc.expected != empty {
+				assert.Equal(t, tc.expected, s)
+			}
 		})
 	}
-}
-
-// mustParseDuration parses s as a duration and panics if there's an error
-func mustParseDuration(s string) time.Duration {
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		panic(fmt.Sprintf("could not parse %v as a duration: %v", s, err))
-	}
-	return d
 }
 
 func TestScrapingCheckAndSetDefaults(t *testing.T) {
@@ -229,7 +244,7 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 		{
 			description: "no storage path",
 			input: Scraping{
-				Interval: mustParseDuration("5s"),
+				Interval: mustParseDuration("5s", t),
 				OneOff:   false,
 				TestMode: false,
 			},
@@ -252,10 +267,26 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 				OneOff:         false,
 				TestMode:       false,
 				StorageDirPath: "/storage",
-				Interval:       mustParseDuration("100ms"),
+				Interval:       mustParseDuration("100ms", t),
 			},
 			expected:           Scraping{},
 			expectErrSubstring: "5 seconds",
+		},
+		{
+			description: "valid config with no link TTL",
+			input: Scraping{
+				OneOff:         false,
+				TestMode:       false,
+				StorageDirPath: "/storage",
+				Interval:       mustParseDuration("10s", t),
+			},
+			expected: Scraping{
+				Interval:       mustParseDuration("10s", t),
+				StorageDirPath: "/storage",
+				OneOff:         false,
+				TestMode:       false,
+				LinkExpiryDays: 180,
+			},
 		},
 	}
 

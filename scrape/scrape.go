@@ -45,13 +45,7 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 		var err error
 		db, err = storage.NewBadgerDB(
 			config.Scraping.StorageDirPath,
-			// A key inserted at one polling
-			// interval expires two intervals
-			// later, meaning that the interval
-			// after a link is collected,
-			// we can still compare it to newly
-			// collected links.
-			time.Duration(2)*config.Scraping.Interval,
+			time.Duration(config.Scraping.LinkExpiryDays*24)*time.Hour,
 		)
 		if err != nil {
 			return err

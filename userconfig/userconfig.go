@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/ptgott/one-newsletter/linksrc"
@@ -37,6 +38,9 @@ type Scraping struct {
 	// Print the HTML body of a single email to stdout and exit to help test
 	// configuration.
 	TestMode bool
+	// Number of days we keep a link in the database before marking it
+	// expired.
+	LinkExpiryDays uint
 }
 
 // CheckAndSetDefaults validates s and either returns a copy of s with default
@@ -58,6 +62,9 @@ func (s *Scraping) CheckAndSetDefaults() (Scraping, error) {
 		return Scraping{}, errors.New(
 			"user-provided config does not include a storage path",
 		)
+	}
+	if s.LinkExpiryDays == 0 {
+		s.LinkExpiryDays = 180
 	}
 
 	return *s, nil
@@ -96,6 +103,17 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 
 	s.StorageDirPath = sp
+
+	li, ok := v["linkExpiryDays"]
+	if !ok {
+		li = "0"
+	}
+
+	lid, err := strconv.Atoi(li)
+	if err != nil {
+		return fmt.Errorf("can't parse the link expiry as an integer")
+	}
+	s.LinkExpiryDays = uint(lid)
 
 	return nil
 }
