@@ -95,7 +95,7 @@ into a website's CSS:
 
 |Level|What you provide|What One Newsletter does|
 |---|---|---|
-|Fully automatic|The URL of a page|Identifies groups of link items and extracts captions based on the structure of each link item.|
+|Fully automatic|The URL of a page, which can be an HTML page or an RSS/Atom feed|Identifies groups of link items and extracts captions based on the structure of each link item.|
 |Automatic caption detection|The URL of a page and the CSS selector of a link within a given item (e.g., `ul li a`)|Extracts captions based on the structure of the identified links.|
 |Fully manual|The URL of a page, the CSS selector of a link item, the CSS selector of a link within the item, and the CSS selector of a caption within the item.|Locates link items, links, and captions based on the provided information.|
 
@@ -104,9 +104,11 @@ A minimal link source configuration looks like this:
 ```yaml
 link_sources:
   - name: site-1
+    # HTML site
     url: https://www.example.com
   - name: site-2
-    url: https://www.example.com
+    # RSS feed
+    url: https://www.example.com/feed
 ```
 
 Or to extract captions automatically but manually configure a link selector:

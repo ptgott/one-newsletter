@@ -1,17 +1,24 @@
 package linksrc
 
 import (
+	"bufio"
+	"bytes"
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"regexp"
 	"strings"
 
+	"github.com/alecthomas/units"
 	"github.com/andybalholm/cascadia"
+	"github.com/mmcdole/gofeed"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
+
+const maxPageSize = 1 * units.Gibibyte
 
 // These elements are not counted when scoring html.Nodes in possible
 // captions, since they are intended to modify inline text. Other html.Nodes
@@ -366,11 +373,86 @@ func extractCaptionFromContainer(n *html.Node, m int) (string, error) {
 
 }
 
-// autoDetectLinkItems uses the configured link selector to return a map of
-// link URLs to LinkItems. Sends status messages and LinkItems to the provided
-// channels, closing the channels when it has finished.
-// an email. n must be the root element.
-func autoDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, messages chan string) {
+type pageFormat int
+
+const (
+	formatUnknown pageFormat = iota
+	formatHTML
+	formatRSS
+	formatAtom
+)
+
+// Used for matching the opening tag that specifies whether a document is an
+// HTML document or an RSS/Atom feed. Assumes the line has been lowercased.
+var openingTagPattern *regexp.Regexp = regexp.MustCompile(
+	`\s*(<rss[^>]*>?|<!doctype html>|<html[^>]*>?|<feed[^>]*>?)\s*`,
+)
+
+// testFormatTag returns the pageFormat associated with a line, that is, if the
+// line indicates that the page follows a particular format (HTML, RSS, or
+// Atom).
+func testFormatTag(line string) pageFormat {
+	m := openingTagPattern.FindString(strings.ToLower(line))
+	if m == "" {
+		return formatUnknown
+	}
+
+	switch {
+	case strings.Contains(m, "rss"):
+		return formatRSS
+	case strings.Contains(m, "html"):
+		return formatHTML
+	case strings.Contains(m, "feed"):
+		return formatAtom
+	}
+	return formatUnknown
+}
+
+// autoDetectLinkItems uses the configured link selector to return a map of link
+// URLs to LinkItems. Sends status messages and LinkItems to the provided
+// channels, closing the channels when it has finished.  an email. n must be the
+// root element.
+func autoDetectLinkItems(r io.Reader, conf Config, links chan LinkItem, messages chan string) {
+	// Copy r into two buffers. One is used for checking whether r is an HTML
+	// document or RSS/Atom feed. The other is for downstream processing once we
+	// have determined the kind of document we're dealing with.
+	var testbuf bytes.Buffer
+	var downstream bytes.Buffer
+	wr := io.MultiWriter(&testbuf, &downstream)
+	io.Copy(wr, io.LimitReader(r, int64(maxPageSize)))
+
+	lines := bufio.NewScanner(&testbuf)
+	lines.Split(bufio.ScanLines)
+	var pf pageFormat
+	for lines.Scan() {
+		f := testFormatTag(lines.Text())
+		if f == formatUnknown {
+			continue
+		}
+		pf = f
+		break
+	}
+	switch pf {
+	case formatHTML:
+		detectHTMLLinkItems(&downstream, conf, links, messages)
+	case formatRSS, formatAtom:
+		detectRSSLinkItems(&downstream, conf, links, messages)
+	default:
+		messages <- "could not detect a format for the page"
+		close(messages)
+		close(links)
+	}
+}
+
+func detectHTMLLinkItems(r io.Reader, conf Config, links chan LinkItem, messages chan string) {
+	n, err := html.Parse(r)
+	if n == nil || err != nil {
+		messages <- "Could not parse the HTML of this page."
+		close(links)
+		close(messages)
+		return
+	}
+
 	// We're entering URL-only mode. Find all links and repeating containers
 	// around those links, even if there are multiple kinds of repeating
 	// containers.
@@ -394,7 +476,6 @@ func autoDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, message
 		close(links)
 		close(messages)
 		return
-
 	}
 
 	// Find groups of links by:
@@ -448,5 +529,34 @@ func autoDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, message
 	}
 	close(links)
 	close(messages)
-	return
+}
+
+var feedStartTag = regexp.MustCompile(`<(rss|feed)`)
+
+// detectRSSLinkItems sends link items to the links channel and error messages
+// to the messages channel. It assumes that r is a valid RSS feed.
+func detectRSSLinkItems(r io.Reader, conf Config, links chan LinkItem, messages chan string) {
+	f, err := gofeed.NewParser().Parse(r)
+	if err != nil {
+		messages <- fmt.Sprintf("cannot parse the feed: %v", err)
+		close(links)
+		close(messages)
+		return
+	}
+
+	for _, item := range f.Items {
+		var c string
+		if item.Title != "" {
+			c = item.Title
+		} else {
+			c = item.Description
+		}
+
+		links <- LinkItem{
+			LinkURL: item.Link,
+			Caption: c,
+		}
+	}
+	close(links)
+	close(messages)
 }

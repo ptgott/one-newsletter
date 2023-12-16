@@ -721,3 +721,59 @@ Jordan Hirsch
 	}
 
 }
+
+func TestTestFormatTag(t *testing.T) {
+	cases := []struct {
+		description string
+		input       string
+		expected    pageFormat
+	}{
+		{
+			description: "RSS",
+			input:       `<rss version="0.91">`,
+			expected:    formatRSS,
+		},
+		{
+			description: "Atom",
+			input:       `<feed xmlns="http://www.w3.org/2005/Atom">`,
+			expected:    formatAtom,
+		},
+		{
+			description: "HTML",
+			input:       `<!DOCTYPE html>`,
+			expected:    formatHTML,
+		},
+		{
+			description: "HTML lowercased",
+			input:       `<!doctype html>`,
+			expected:    formatHTML,
+		},
+		{
+			description: "HTML mixed case",
+			input:       `<!dOcTyPe html>`,
+			expected:    formatHTML,
+		},
+		{
+			description: "HTML in quirks mode",
+			input:       `<html lang="en" op="news">`,
+			expected:    formatHTML,
+		},
+		{
+			description: "HTML on same line as another tag",
+			input:       "<html><head>",
+			expected:    formatHTML,
+		},
+		{
+			description: "Relevant tag after another",
+			input:       `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"`,
+			expected:    formatRSS,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			actual := testFormatTag(c.input)
+			assert.Equal(t, c.expected, actual)
+		})
+	}
+}

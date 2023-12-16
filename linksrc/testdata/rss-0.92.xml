@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<!--Based on: https://www.rssboard.org/files/sample-rss-092.xml-->
+<rss version="0.92">
+	<channel>
+		<title>Winnemac Daily News</title>
+		<link>https://winnemac.example.com/</link>
+		<description>Bringing truth and insight to your doorstep every day</description>
+		<lastBuildDate>Fri, 13 Apr 2001 09:03:49 GMT</lastBuildDate>
+		<docs>https://www.rssboard.org/rss-0-9-2</docs>
+		<managingEditor>eleanor.harper@winnemac.example.com (Eleanor Harper)</managingEditor>
+		<webMaster>ethan.nguyen@winnemac.example.com (Ethan Nguyen)</webMaster>
+		<cloud domain="data.example.com" port="80" path="/rpc" registerProcedure="updates.notify" protocol="xml-rpc" />
+		<item>
+			<title>Cats and Dogs Form Unlikely Friendship</title>
+			<link>https://winnemac.example.com/story/151</link>
+			<description>In a heartwarming turn of events, a cat and a dog were spotted playing together in the park, proving that friendships can transcend species.</description>
+		</item>
+		<item>
+			<title>Local Artist's Painting Sells for Record Price</title>
+			<link>https://winnemac.example.com/story/150</link>
+			<description>A painting by a local artist recently sold at an auction for a staggering amount, setting a new record in the art world.</description>
+			<source url="https://zenith.example.com/feed/rss.xml">Zenith Times</source>
+		</item>
+		<item>
+			<title>New Movie Breaks Box Office Records</title>
+			<link>https://winnemac.example.com/story/149</link>
+			<description>The latest blockbuster movie has shattered box office records, becoming the highest-grossing film of all time. Moviegoers can't get enough of it.</description>
+			<enclosure url="https://winnemac.example.com/audio/movienews.mp3" length="4846097" type="audio/mpeg" />
+			<category domain="https://directory.example.com/">entertainment/movies</category>
+		</item>
+	</channel>
+</rss>
