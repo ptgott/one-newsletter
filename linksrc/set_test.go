@@ -47,7 +47,7 @@ func mustParseURL(raw string) url.URL {
 
 func TestNewSet(t *testing.T) {
 	tests := []struct {
-		html    io.Reader
+		source  io.Reader
 		name    string
 		conf    Config
 		code    int
@@ -55,8 +55,8 @@ func TestNewSet(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "canonical/intended case",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "canonical/intended case",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -84,8 +84,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "links with different hostnames: manual",
-			html: mustReadFile(path.Join("testdata", "mixed-hostnames.html"), t),
+			name:   "links with different hostnames: manual",
+			source: mustReadFile(path.Join("testdata", "mixed-hostnames.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -113,8 +113,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "links with different hostnames: automatic",
-			html: mustReadFile(path.Join("testdata", "mixed-hostnames.html"), t),
+			name:   "links with different hostnames: automatic",
+			source: mustReadFile(path.Join("testdata", "mixed-hostnames.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -139,8 +139,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "canonical/intended case with relative link URLs",
-			html: mustReadFile(path.Join("testdata", "straightforward-relative-links.html"), t),
+			name:   "canonical/intended case with relative link URLs",
+			source: mustReadFile(path.Join("testdata", "straightforward-relative-links.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -168,8 +168,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "canonical/intended case with only a link selector",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "canonical/intended case with only a link selector",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -195,8 +195,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "canonical/intended case with relative link URLs and only a link selector",
-			html: mustReadFile(path.Join("testdata", "straightforward-relative-links.html"), t),
+			name:   "canonical/intended case with relative link URLs and only a link selector",
+			source: mustReadFile(path.Join("testdata", "straightforward-relative-links.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -222,8 +222,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "ambiguous link selector",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "ambiguous link selector",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -240,8 +240,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "ambiguous caption selector",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "ambiguous caption selector",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -268,8 +268,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "no link selector matches",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "no link selector matches",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -286,8 +286,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "the link selector matches a non-link",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "the link selector matches a non-link",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -304,8 +304,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "the caption selector has no matches",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "the caption selector has no matches",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -319,8 +319,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "400 status code",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "400 status code",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -338,8 +338,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "500 status code",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "500 status code",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -357,8 +357,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "unexpected status code",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "unexpected status code",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:            "My Cool Publication",
 				URL:             mustParseURL("http://www.example.com"),
@@ -376,8 +376,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "autodetect with link selector: ny magazine intelligencer",
-			html: mustReadFile(path.Join("testdata", "intelligencer-feed.html"), t),
+			name:   "autodetect with link selector: ny magazine intelligencer",
+			source: mustReadFile(path.Join("testdata", "intelligencer-feed.html"), t),
 			conf: Config{
 				Name:               "Intelligencer",
 				URL:                mustParseURL("http://www.example.com"),
@@ -405,8 +405,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "autodetect with link selector: arts and letters daily",
-			html: mustReadFile(path.Join("testdata", "aldaily.html"), t),
+			name:   "autodetect with link selector: arts and letters daily",
+			source: mustReadFile(path.Join("testdata", "aldaily.html"), t),
 			conf: Config{
 				Name:         "Arts and Letters Daily",
 				URL:          mustParseURL("https://www.example.com"),
@@ -432,8 +432,8 @@ func TestNewSet(t *testing.T) {
 				messages: nil},
 		},
 		{
-			name: "news source with a lot of short block-level HTMl text",
-			html: mustReadFile(path.Join("testdata", "music-reviews.html"), t),
+			name:   "news source with a lot of short block-level HTMl text",
+			source: mustReadFile(path.Join("testdata", "music-reviews.html"), t),
 			conf: Config{
 				Name:               "Music Review Site",
 				URL:                mustParseURL("https://www.example.com"),
@@ -457,8 +457,8 @@ func TestNewSet(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "canonical/intended case with a URL-only config",
-			html: mustReadFile(path.Join("testdata", "straightforward.html"), t),
+			name:   "canonical/intended case with a URL-only config",
+			source: mustReadFile(path.Join("testdata", "straightforward.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -483,8 +483,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "URL-only config with multiple container types",
-			html: mustReadFile(path.Join("testdata", "straightforward_multiple_container_types.html"), t),
+			name:   "URL-only config with multiple container types",
+			source: mustReadFile(path.Join("testdata", "straightforward_multiple_container_types.html"), t),
 			conf: Config{
 				Name:               "My Cool Publication",
 				URL:                mustParseURL("http://www.example.com"),
@@ -513,8 +513,8 @@ func TestNewSet(t *testing.T) {
 			},
 		},
 		{
-			name: "autodetect in URL-only mode: NY magazine intelligencer",
-			html: mustReadFile(path.Join("testdata", "intelligencer-feed.html"), t),
+			name:   "autodetect in URL-only mode: NY magazine intelligencer",
+			source: mustReadFile(path.Join("testdata", "intelligencer-feed.html"), t),
 			conf: Config{
 				Name:               "Intelligencer",
 				URL:                mustParseURL("http://www.example.com"),
@@ -540,11 +540,119 @@ func TestNewSet(t *testing.T) {
 				messages: nil,
 			},
 		},
+		{
+			name:   "autodetect with rss 2.0 feed",
+			source: mustReadFile(path.Join("testdata", "rss-2.0.xml"), t),
+			conf: Config{
+				Name:               "My RSS 2.0 Feed",
+				URL:                mustParseURL("https://www.example.com"),
+				MaxItems:           3,
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "My RSS 2.0 Feed",
+				items: map[string]LinkItem{
+					"https://www.example.com/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station": {
+						LinkURL: "https://www.example.com/press-release/louisiana-students-to-hear-from-nasa-astronauts-aboard-space-station",
+						Caption: "Louisiana Students to Hear from NASA Astronauts Aboard Space Station",
+					},
+					"https://www.example.com/press-release/nasa-awards-integrated-mission-operations-contract-iii": {
+						LinkURL: "https://www.example.com/press-release/nasa-awards-integrated-mission-operations-contract-iii",
+						Caption: "NASA has selected KBR Wyle Services, LLC, of Fulton, Maryland, to provide mission and flight crew operations support for the International Space Station and future human space exploration.",
+					},
+					"https://www.example.com/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services": {
+						LinkURL: "https://www.example.com/press-release/nasa-expands-options-for-spacewalking-moonwalking-suits-services",
+						Caption: "NASA Expands Options for Spacewalking, Moonwalking Suits",
+					},
+				},
+			},
+		},
+		{
+			name:   "atom feed",
+			source: mustReadFile(path.Join("testdata", "atom-feed.xml"), t),
+			conf: Config{
+				Name:               "Atom Feed",
+				URL:                mustParseURL("https://www.example.com"),
+				MaxItems:           3,
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "Atom Feed",
+				items: map[string]LinkItem{
+					"http://example.com/2003/12/13/atom01": {
+						LinkURL: "http://example.com/2003/12/13/atom01",
+						Caption: "Example 1",
+					},
+					"http://example.com/2003/12/13/atom02": {
+						LinkURL: "http://example.com/2003/12/13/atom02",
+						Caption: "Example 2",
+					},
+					"http://example.com/2003/12/13/atom03": {
+						LinkURL: "http://example.com/2003/12/13/atom03",
+						Caption: "Example 3",
+					},
+				},
+			},
+		},
+		{
+			name:   "rss 0.91 feed",
+			source: mustReadFile(path.Join("testdata", "rss-0.91.xml"), t),
+			conf: Config{
+				Name:               "RSS 0.91",
+				URL:                mustParseURL("https://example.com"),
+				MaxItems:           3,
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "RSS 0.91",
+				items: map[string]LinkItem{
+					"http://example.com/read.php?item=24": {
+						LinkURL: "http://example.com/read.php?item=24",
+						Caption: "Giving the world a pluggable Gnutella",
+					},
+					"http://example.com/read.php?item=23": {
+						LinkURL: "http://example.com/read.php?item=23",
+						Caption: "Syndication discussions hot up",
+					},
+					"http://example.com/read.php?item=22": {
+						LinkURL: "http://example.com/read.php?item=22",
+						Caption: "Personal web server integrates file sharing and messaging",
+					},
+				},
+			},
+		},
+		{
+			name:   "rss 0.92 feed",
+			source: mustReadFile(path.Join("testdata", "rss-0.92.xml"), t),
+			conf: Config{
+				Name:               "RSS 0.92",
+				URL:                mustParseURL("https://winnemac.example.com"),
+				MaxItems:           3,
+				ShortElementFilter: 3,
+			},
+			want: Set{
+				Name: "RSS 0.92",
+				items: map[string]LinkItem{
+					"https://winnemac.example.com/story/151": {
+						LinkURL: "https://winnemac.example.com/story/151",
+						Caption: "Cats and Dogs Form Unlikely Friendship",
+					},
+					"https://winnemac.example.com/story/150": {
+						LinkURL: "https://winnemac.example.com/story/150",
+						Caption: "Local Artist's Painting Sells for Record Price",
+					},
+					"https://winnemac.example.com/story/149": {
+						LinkURL: "https://winnemac.example.com/story/149",
+						Caption: "New Movie Breaks Box Office Records",
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			got := NewSet(ctx, tt.html, tt.conf, tt.code)
+			got := NewSet(ctx, tt.source, tt.conf, tt.code)
 			assert.Equal(t, tt.want, got)
 		})
 	}

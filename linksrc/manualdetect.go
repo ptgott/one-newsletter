@@ -2,6 +2,7 @@ package linksrc
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 
 	"golang.org/x/net/html"
@@ -10,7 +11,15 @@ import (
 // manuallyDetectLinkItems uses the configured link item, link, and caption
 // selectors. Sends LinkItems and messages to add to an email to the provided
 // channels.
-func manuallyDetectLinkItems(n *html.Node, conf Config, links chan LinkItem, messages chan string) {
+func manuallyDetectLinkItems(r io.Reader, conf Config, links chan LinkItem, messages chan string) {
+	n, err := html.Parse(r)
+	if n == nil || err != nil {
+		messages <- "Could not parse the HTML of this page."
+		close(links)
+		close(messages)
+		return
+	}
+
 	if conf.ItemSelector == nil {
 		messages <- "Could not parse the link item selector."
 		close(links)

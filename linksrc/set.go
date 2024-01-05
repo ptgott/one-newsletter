@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"golang.org/x/net/html"
 )
 
 // getDisplayURL determines how to display a URL found in a link within the
@@ -85,36 +84,13 @@ func NewSet(ctx context.Context, r io.Reader, conf Config, code int) Set {
 		return s
 	}
 
-	// Note that the following quick.Check function could not find an invalid
-	// input for html.Parse:
-	//
-	// err := quick.Check(func(doc []byte) bool {
-	//     r := bytes.NewReader(doc)
-	//     _, err := html.Parse(r)
-	//     if err != nil {
-	//         return false
-	//     }
-	//     return true
-	// }, &quick.Config{
-	//     MaxCount: 10000,
-	// })
-	//
-	// As a result, it's safe to say that we shouldn't need to handle errors
-	// for html.Parse.
-	n, _ := html.Parse(r)
-
-	if n == nil {
-		s.AddMessage("Could not parse the HTML of this page.")
-		return s
-	}
-
 	linkCh := make(chan LinkItem)
 	msg := make(chan string)
 
 	if conf.ItemSelector == nil || conf.CaptionSelector == nil {
-		go autoDetectLinkItems(n, conf, linkCh, msg)
+		go autoDetectLinkItems(r, conf, linkCh, msg)
 	} else {
-		go manuallyDetectLinkItems(n, conf, linkCh, msg)
+		go manuallyDetectLinkItems(r, conf, linkCh, msg)
 	}
 
 	for {
