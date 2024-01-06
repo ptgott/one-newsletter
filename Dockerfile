@@ -1,4 +1,4 @@
-FROM golang:1.15
+FROM golang:1.21
 COPY . /home/
 WORKDIR /home/
 # Alpine doesn't ship with the libraries cgo would be dynamically linked to, so
