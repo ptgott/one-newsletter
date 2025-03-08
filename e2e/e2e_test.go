@@ -10,15 +10,41 @@ import (
 	"testing"
 	"time"
 
+	css "github.com/andybalholm/cascadia"
+	"github.com/ptgott/one-newsletter/email"
+	"github.com/ptgott/one-newsletter/linksrc"
 	"github.com/ptgott/one-newsletter/scrape"
 	"github.com/ptgott/one-newsletter/smtptest"
-
+	"github.com/ptgott/one-newsletter/userconfig"
 	"github.com/rs/zerolog/log"
 )
 
 var (
 	appPath string // filled in later--path to the built application
 )
+
+// fakeTickChan takes a count of expected email and returns a notification
+// schedule and slice of ticks so that each tick satisfies the notification
+// schedule.
+func fakeTickChan(count int) (userconfig.NotificationSchedule, []time.Time) {
+	// Make a notification schedule for a Monday, then create one time.Time for
+	// an existing Monday plus each Monday after for a number of weeks equal to
+	// count.
+	sched := userconfig.NotificationSchedule{
+		Weekdays: userconfig.Monday,
+		Hour:     0,
+	}
+	t, err := time.Parse(time.DateOnly, "2025-06-09")
+	if err != nil {
+		panic(err) // Shouldn't be an error since there's a hardcoded input
+	}
+	c := make([]time.Time, count)
+
+	for i := 0; i < count; i++ {
+		c[i] = t.Add(time.Duration(i*7*24) * time.Hour)
+	}
+	return sched, c
+}
 
 // Check that the number of emails sent is within the expected range.
 // Declare a test environment with a number of fake e-publications, run the
@@ -32,47 +58,63 @@ func TestNewsletterEmailSending(t *testing.T) {
 		numHTTPServers: epubs,
 		numLinks:       linksPerPub,
 	})
-
 	defer testenv.tearDown()
-
 	if err != nil {
 		t.Fatalf("error starting test environment: %v", err)
 	}
 
+	// One email gets sent right away, so make a tick channel for the rest.
+	sched, ticks := fakeTickChan(expectedEmails - 1)
+
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	u := make([]linksrc.Config, len(urls), len(urls))
 	for i := range urls {
 		// not expecting errors since these URLs are guaranteed to be
 		// for running servers, and don't come from user input
 		pu, _ := url.Parse(urls[i])
 
-		u[i] = mockLinksrcInfo{
-			URL:  urls[i],
+		u[i] = linksrc.Config{
+			URL:  *pu,
 			Name: fmt.Sprintf("site-%v", pu.Port()),
 		}
 	}
 
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
 	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      "5s", // Ignored here
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			LinkSources: u,
+			Scraping: userconfig.Scraping{
+				Schedule:       sched,
+				StorageDirPath: testenv.tempDirPath,
+			},
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
+	ch := make(chan time.Time, 1)
+	store := userconfig.NewScheduleStore()
+	store.Add("myschedule", sched)
 	scrapeConfig := scrape.Config{
-		TickCh: nil,
-		// Since we send an email right away, before using the iteration
-		// limit.
-		IterationLimit: uint(expectedEmails - 1),
+		ScheduleStore: store,
+		TickCh:        ch,
 	}
 
+	go func() {
+		for i := range ticks {
+			ch <- ticks[i]
+		}
+		close(ch)
+	}()
+
 	scrape.StartLoop(&scrapeConfig, &config)
+
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 
 	if err != nil {
@@ -92,7 +134,6 @@ func TestNewsletterEmailSending(t *testing.T) {
 			len(ems),
 		)
 	}
-
 }
 
 // Make sure successive emails for the same link site show
@@ -106,48 +147,55 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 		numHTTPServers: epubs,
 		numLinks:       linksPerPub,
 	})
-
 	defer testenv.tearDown()
-
 	if err != nil {
 		t.Fatalf("error starting test environment: %v", err)
 	}
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	u := make([]linksrc.Config, len(urls), len(urls))
 	for i := range urls {
 		// not expecting errors since these URLs are guaranteed to be
 		// for running servers, and don't come from user input
 		pu, _ := url.Parse(urls[i])
 
-		u[i] = mockLinksrcInfo{
-			URL:  urls[i],
+		u[i] = linksrc.Config{
+			URL:  *pu,
 			Name: fmt.Sprintf("site-%v", pu.Port()),
 		}
 	}
 
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
 	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      "5s", // Ignored in this case
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			LinkSources: u,
+			Scraping: userconfig.Scraping{
+				Schedule: userconfig.NotificationSchedule{
+					Weekdays: userconfig.Monday,
+					Hour:     12,
+				},
+				StorageDirPath: testenv.tempDirPath,
+			},
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
+	// Closing the channel immediately since we're relying on the initial
+	// email sent in StartLoop.
+	ch := make(chan time.Time, 1)
+	close(ch)
 	scrapeConfig := scrape.Config{
-		TickCh:         nil,
-		IterationLimit: 1,
+		TickCh: ch,
 	}
 
 	scrape.StartLoop(&scrapeConfig, &config)
-
-	// Run the application from the entrypoint with our new config
-
 	// Wait for the application to poll the link site, check for emails,
 	// update the application, wait another poll interval, and check
 	// for emails again.
@@ -163,6 +211,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	testenv.update(linksToUpdate)
 	ut := time.Now().UnixNano()
 	log.Info().Msg("finished updating the mock link sites")
+
 	scrape.StartLoop(&scrapeConfig, &config)
 	em2, err := testenv.SMTPServer.RetrieveEmails(ut)
 	if err != nil {
@@ -221,34 +270,46 @@ func TestMaxLinkLimits(t *testing.T) {
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	u := make([]linksrc.Config, len(urls), len(urls))
 	for i := range urls {
 		// not expecting errors since these URLs are guaranteed to be
 		// for running servers, and don't come from user input
 		pu, _ := url.Parse(urls[i])
 
-		u[i] = mockLinksrcInfo{
-			URL:      urls[i],
+		u[i] = linksrc.Config{
+			URL:      *pu,
 			Name:     fmt.Sprintf("site-%v", pu.Port()),
-			MaxItems: 5,
+			MaxItems: uint(maxLinksInEmail),
 		}
 	}
 
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
 	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      "5s", // Ignored in this case
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			LinkSources: u,
+			Scraping: userconfig.Scraping{
+				Schedule: userconfig.NotificationSchedule{
+					Weekdays: userconfig.Monday,
+					Hour:     12,
+				},
+				StorageDirPath: testenv.tempDirPath,
+			},
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
+	// Closing the channel immediately since we're relying on the initial
+	// emails sent in StartLoop.
+	ch := make(chan time.Time, 1)
+	close(ch)
 	scrapeConfig := scrape.Config{
-		TickCh:         nil,
-		IterationLimit: 1,
+		TickCh: ch,
 	}
 
 	scrape.StartLoop(&scrapeConfig, &config)
@@ -302,6 +363,7 @@ func totalBadgerDataFileSize(dirPath string) float64 {
 // invalid CSS. This test exists because one site with a config that included
 // an ambiguous selector seems to have caused the application to deadlock.
 func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
+	expectedEmails := 2
 	epubs := 1
 	linksPerPub := 10
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -315,42 +377,64 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 		t.Fatalf("error starting test environment: %v", err)
 	}
 
+	// One email gets sent right away, so make a tick channel for the rest.
+	sched, ticks := fakeTickChan(expectedEmails - 1)
+
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	u := make([]linksrc.Config, len(urls), len(urls))
 	for i := range urls {
 		// not expecting errors since these URLs are guaranteed to be
 		// for running servers, and don't come from user input
 		pu, _ := url.Parse(urls[i])
 
-		u[i] = mockLinksrcInfo{
-			URL:      urls[i],
+		u[i] = linksrc.Config{
+			URL:      *pu,
 			Name:     fmt.Sprintf("site-%v", pu.Port()),
 			MaxItems: 5,
-			// "ul" is ambiguous, since each link items has the selector
+			// "ul" is ambiguous, since each link item has the selector
 			// "ul li"
-			SelectorsOverride: `      itemSelector: ul
-      captionSelector: p
-      linkSelector: a`,
+			ItemSelector:    css.MustCompile("ul"),
+			CaptionSelector: css.MustCompile("p"),
+			LinkSelector:    css.MustCompile("a"),
 		}
 	}
 
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
 	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      "5s", // Ignored here
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			LinkSources: u,
+			Scraping: userconfig.Scraping{
+				Schedule: userconfig.NotificationSchedule{
+					Weekdays: userconfig.Monday,
+					Hour:     12,
+				},
+				StorageDirPath: testenv.tempDirPath,
+			},
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
+	ch := make(chan time.Time, 1)
+	store := userconfig.NewScheduleStore()
+	store.Add("myschedule", sched)
 	scrapeConfig := scrape.Config{
-		TickCh:         nil,
-		IterationLimit: 1,
+		ScheduleStore: store,
+		TickCh:        ch,
 	}
+
+	go func() {
+		for i := range ticks {
+			ch <- ticks[i]
+		}
+		close(ch)
+	}()
 
 	scrape.StartLoop(&scrapeConfig, &config)
 
@@ -384,27 +468,34 @@ func TestTestModeFlag(t *testing.T) {
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	u := make([]linksrc.Config, len(urls), len(urls))
 	for i := range urls {
 		// not expecting errors since these URLs are guaranteed to be
 		// for running servers, and don't come from user input
 		pu, _ := url.Parse(urls[i])
 
-		u[i] = mockLinksrcInfo{
-			URL:  urls[i],
+		u[i] = linksrc.Config{
+			URL:  *pu,
 			Name: fmt.Sprintf("site-%v", pu.Port()),
 		}
 	}
 
-	// We'll still fire up an SMTP server, but we shouldn't be sending anything
-	// to it.
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
 	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      "5s", // Ignored here
-			TestMode:          true,
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			LinkSources: u,
+			Scraping: userconfig.Scraping{
+				TestMode: true, // This is important here
+				Schedule: userconfig.NotificationSchedule{
+					Weekdays: userconfig.Monday,
+					Hour:     12,
+				},
+				StorageDirPath: testenv.tempDirPath,
+			},
 		},
 	)
 	if err != nil {
@@ -413,10 +504,13 @@ func TestTestModeFlag(t *testing.T) {
 
 	var msg bytes.Buffer
 
+	// Closing the channel immediately since we're relying on the initial
+	// email sent in StartLoop.
+	ch := make(chan time.Time, 1)
+	close(ch)
 	scrapeConfig := scrape.Config{
-		TickCh:         nil,
-		IterationLimit: 1,
-		OutputWr:       &msg,
+		TickCh:   ch,
+		OutputWr: &msg,
 	}
 
 	scrape.StartLoop(&scrapeConfig, &config)
@@ -460,33 +554,46 @@ func TestOneOffFlag(t *testing.T) {
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	u := make([]linksrc.Config, len(urls), len(urls))
 	for i := range urls {
 		// not expecting errors since these URLs are guaranteed to be
 		// for running servers, and don't come from user input
 		pu, _ := url.Parse(urls[i])
 
-		u[i] = mockLinksrcInfo{
-			URL:  urls[i],
+		u[i] = linksrc.Config{
+			URL:  *pu,
 			Name: fmt.Sprintf("site-%v", pu.Port()),
 		}
 	}
 
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
 	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      "5s",
-			OneOff:            true,
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			LinkSources: u,
+			Scraping: userconfig.Scraping{
+				Schedule: userconfig.NotificationSchedule{
+					Weekdays: userconfig.Monday,
+					Hour:     12,
+				},
+				StorageDirPath: testenv.tempDirPath,
+				OneOff:         true, // This is important here
+			},
 		},
 	)
 	if err != nil {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
+	// Closing the channel immediately since we're relying on the initial
+	// email sent in StartLoop.
+	ch := make(chan time.Time, 1)
+	close(ch)
 	scrapeConfig := scrape.Config{
-		TickCh: nil, // since we're using a one-off configuration
+		TickCh: ch,
 	}
 
 	dbBefore := totalBadgerDataFileSize(testenv.tempDirPath)
@@ -522,7 +629,6 @@ func TestOneOffFlag(t *testing.T) {
 }
 
 func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
-	pollIntervalS := 5
 	epubs := 3
 	linksPerPub := 5
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -538,26 +644,36 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
-	u := make([]mockLinksrcInfo, len(urls), len(urls))
+	u := make([]linksrc.Config, len(urls), len(urls))
 	for i := range urls {
 		// not expecting errors since these URLs are guaranteed to be
 		// for running servers, and don't come from user input
 		pu, _ := url.Parse(urls[i])
 
-		u[i] = mockLinksrcInfo{
-			URL:  urls[i],
+		u[i] = linksrc.Config{
+			URL:  *pu,
 			Name: fmt.Sprintf("site-%v", pu.Port()),
 		}
 	}
 
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
 	config, err := createUserConfig(
-		appConfigOptions{
-			SMTPServerAddress: testenv.SMTPServer.Address(),
-			LinkSources:       u,
-			StorageDir:        testenv.tempDirPath,
-			PollInterval:      fmt.Sprintf("%vs", pollIntervalS),
-			OneOff:            true,
-			TestMode:          true,
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			LinkSources: u,
+			Scraping: userconfig.Scraping{
+				// Note that both TestMode and OneOff are true here.
+				TestMode: true,
+				OneOff:   true,
+				Schedule: userconfig.NotificationSchedule{
+					Weekdays: userconfig.Monday,
+					Hour:     12,
+				},
+				StorageDirPath: testenv.tempDirPath,
+			},
 		},
 	)
 	if err != nil {
@@ -565,8 +681,12 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 	}
 
 	var msg bytes.Buffer
+	// Closing the channel immediately since we're relying on the initial
+	// email sent in StartLoop.
+	ch := make(chan time.Time, 1)
+	close(ch)
 	scrapeConfig := scrape.Config{
-		TickCh:   nil, // since we're using a one-off configuration
+		TickCh:   ch,
 		OutputWr: &msg,
 	}
 

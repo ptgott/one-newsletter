@@ -20,10 +20,8 @@ type Config struct {
 	// Writer for a message to display when a scrape has finished.The means
 	// of display is controlled by the caller. Intended for email text shown
 	// when the --noemail flag is used.
-	OutputWr io.Writer
-	// Number of rounds of scraping and emailing to perform before stopping
-	// the scraper. Used for testing.
-	IterationLimit uint
+	OutputWr      io.Writer
+	ScheduleStore *userconfig.ScheduleStore
 }
 
 // Run conducts a single scrape and email cycle and returns the first error
@@ -175,7 +173,7 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 }
 
 // StartLoop begins the main sequence of scraping websites for links every
-// interval (defined by tc) with the provided config. If an s.ErrCh is provided,
+// interval as specified in the provided config. If an s.ErrCh is provided,
 // sends any errors to it. Send a struct{} to sc to stop the scraper.
 func StartLoop(s *Config, c *userconfig.Meta) error {
 	// Run the first scrape immediately
@@ -189,31 +187,25 @@ func StartLoop(s *Config, c *userconfig.Meta) error {
 		return nil
 	}
 
-	// Implement the iteration limit by replacing the tick channel with a
-	// buffered channel pre-loaded with ticks.
-	if s.IterationLimit > 0 {
-		ch := make(chan (time.Time), s.IterationLimit)
-		for i := uint(0); i < s.IterationLimit; i++ {
-			ch <- time.Time{}
-		}
-		s.TickCh = ch
-	}
-
 	for {
-		select {
-		case <-s.TickCh:
-			err := Run(s.OutputWr, c)
-			if err != nil {
-				return err
-			}
-		default:
-			// If we run out of ticks, it's either because we're waiting
-			// for more ticks or there's an iteration limit and we've
-			// run through all the iterations.
-			if s.IterationLimit > 0 {
-				return nil
-			}
+		tk, ok := <-s.TickCh
+		if !ok {
+			break
+		}
+		newsletters := s.ScheduleStore.Get(tk)
+
+		// This is awkward now, but when we make it possible to
+		// send multiple newsletters, we can pass a map of
+		// newsletter names to configs to StartLoop, then look
+		// up each newsletter name from the map to determine
+		// which newsletters to send.
+		if len(newsletters) == 0 {
 			continue
 		}
+		err := Run(s.OutputWr, c)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }

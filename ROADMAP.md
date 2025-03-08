@@ -42,15 +42,11 @@
 
 1. Make it easier to test configurations locally.
 
-   - Add a `-test` flag that combines `-oneoff` and `-noemail`.
    - For `-test`, don't include verbose logs.
    - For `-oneoff` and `-noemail` operations, don't touch the data directory
    - For `-test`, only read the `link_sources` part of the config.
 
 1. Don't include verbose logs for `oneoff` operations.
-
-1. Deprecate manual newsletter configuration (i.e., where you need to specify
-   the link container, caption selector, and link selector).
 
 1. Find an alternative to static passwords stored in the config file.
 
@@ -68,10 +64,6 @@
 1. Update the third-party licenses table using a CI job (probably using GitHub
    Actions) and [`go-licenses`](https://github.com/google/go-licenses). Or use a
    make target.
-
-1. Make `TestDBCleanup` (`e2e/e2e_test.go`) more deterministic and faster
-   running. Right now, it takes the longest of all e2e tests and sometimes
-   fails.
 
 ## Making the newsletter more useful
 

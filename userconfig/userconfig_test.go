@@ -41,7 +41,7 @@ link_sources:
       captionSelector: "p"
       linkSelector: "a"
 scraping:
-    interval: 5s
+    schedule: "M 12"
     storageDir: ./tempTestDir3012705204`,
 		},
 		{
@@ -114,7 +114,7 @@ link_sources:
       url: http://127.0.0.1:38911
       linkSelector: "a"
 scraping:
-    interval: 5s
+    schedule: "M 12"
     storageDir: ./tempTestDir3012705204`,
 		},
 		{
@@ -132,7 +132,7 @@ link_sources:
     - name: site-38911
       url: http://127.0.0.1:38911
 scraping:
-    interval: 5s
+    schedule: "M 13"
     storageDir: ./tempTestDir3012705204`,
 		},
 	}
@@ -169,14 +169,6 @@ scraping:
 
 }
 
-func mustParseDuration(s string, t *testing.T) time.Duration {
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
-}
-
 func TestScrapingUnmarshalYAML(t *testing.T) {
 	testCases := []struct {
 		description   string
@@ -188,14 +180,18 @@ func TestScrapingUnmarshalYAML(t *testing.T) {
 			description:   "valid case",
 			shouldBeError: false,
 			input: `storageDir: ./tempTestDir3012705204
-interval: 5s
-linkExpiryDays: 100`,
+linkExpiryDays: 100
+schedule: "M 12"
+`,
 			expected: Scraping{
-				Interval:       mustParseDuration("5s", t),
 				StorageDirPath: "./tempTestDir3012705204",
 				OneOff:         false,
 				TestMode:       false,
 				LinkExpiryDays: 100,
+				Schedule: NotificationSchedule{
+					Weekdays: Monday,
+					Hour:     12,
+				},
 			},
 		},
 		{
@@ -244,7 +240,6 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 		{
 			description: "no storage path",
 			input: Scraping{
-				Interval: mustParseDuration("5s", t),
 				OneOff:   false,
 				TestMode: false,
 			},
@@ -252,36 +247,13 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 			expectErrSubstring: "path",
 		},
 		{
-			description: "no interval",
-			input: Scraping{
-				OneOff:         false,
-				TestMode:       false,
-				StorageDirPath: "/storage",
-			},
-			expected:           Scraping{},
-			expectErrSubstring: "interval",
-		},
-		{
-			description: "interval less than 5s",
-			input: Scraping{
-				OneOff:         false,
-				TestMode:       false,
-				StorageDirPath: "/storage",
-				Interval:       mustParseDuration("100ms", t),
-			},
-			expected:           Scraping{},
-			expectErrSubstring: "5 seconds",
-		},
-		{
 			description: "valid config with no link TTL",
 			input: Scraping{
 				OneOff:         false,
 				TestMode:       false,
 				StorageDirPath: "/storage",
-				Interval:       mustParseDuration("10s", t),
 			},
 			expected: Scraping{
-				Interval:       mustParseDuration("10s", t),
 				StorageDirPath: "/storage",
 				OneOff:         false,
 				TestMode:       false,
@@ -313,6 +285,281 @@ func TestScrapingCheckAndSetDefaults(t *testing.T) {
 			if !reflect.DeepEqual(actual, c.expected) {
 				t.Fatalf("expected %+v but got %+v", c.expected, actual)
 			}
+		})
+	}
+}
+
+func Test_moments(t *testing.T) {
+	cases := []struct {
+		description string
+		input       NotificationSchedule
+		expected    []Moment
+	}{
+		{
+			description: "wednesdays at noon",
+			input: NotificationSchedule{
+				Weekdays: Wednesday,
+				Hour:     12,
+			},
+			expected: []Moment{
+				{
+					Day:  time.Wednesday,
+					Hour: 12,
+				},
+			},
+		},
+		{
+			description: "mondays and fridays at 1pm",
+			input: NotificationSchedule{
+				Weekdays: Friday | Monday,
+				Hour:     13,
+			},
+			expected: []Moment{
+				{
+					Day:  time.Monday,
+					Hour: 13,
+				},
+				{
+					Day:  time.Friday,
+					Hour: 13,
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			assert.Equal(t, c.expected, moments(c.input))
+		})
+	}
+}
+
+func TestAddGet(t *testing.T) {
+	cases := []struct {
+		description string
+		input       NotificationSchedule
+		currentTime string // DateTime format
+	}{
+		{
+			description: "wednesdays at noon",
+			input: NotificationSchedule{
+				Weekdays: Wednesday,
+				Hour:     12,
+			},
+			currentTime: "2025-06-04 12:00:00",
+		},
+		{
+			description: "mondays and fridays at 1pm",
+			input: NotificationSchedule{
+				Weekdays: Friday | Monday,
+				Hour:     13,
+			},
+			currentTime: "2025-06-02 13:00:00",
+		},
+	}
+
+	for _, c := range cases {
+		s := NewScheduleStore()
+		s.Add("myhandle", c.input)
+		m, err := time.Parse(time.DateTime, c.currentTime)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t,
+			[]string{"myhandle"}, s.Get(m),
+		)
+	}
+}
+
+func TestGet(t *testing.T) {
+	moments := map[string]NotificationSchedule{
+		"moment1": {
+			Weekdays: Monday,
+			Hour:     12,
+		},
+		"moment2": {
+			Weekdays: Tuesday,
+			Hour:     13,
+		},
+		"moment3": {
+			Weekdays: Wednesday,
+			Hour:     14,
+		},
+		"moment4": {
+			Weekdays: Wednesday,
+			Hour:     14,
+		},
+	}
+
+	t.Run("multiple matches", func(t *testing.T) {
+		s := NewScheduleStore()
+		for k, v := range moments {
+			s.Add(k, v)
+		}
+		expected := []string{"moment3", "moment4"}
+		m, err := time.Parse(time.DateTime, "2025-06-04 14:00:00")
+		if err != nil {
+			t.Fatal(err)
+		}
+		actual := s.Get(m)
+
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("successive identical gets", func(t *testing.T) {
+		s := NewScheduleStore()
+		for k, v := range moments {
+			s.Add(k, v)
+		}
+		expected := []string{}
+		m1, err := time.Parse(time.DateTime, "2025-06-04 12:00:00")
+		if err != nil {
+			t.Fatal(err)
+		}
+		m2, err := time.Parse(time.DateTime, "2025-06-04 12:01:00")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Ignoring the result of the first Get.
+		s.Get(m1)
+		actual := s.Get(m2)
+
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("identical gets in successive weeks", func(t *testing.T) {
+		s := NewScheduleStore()
+		for k, v := range moments {
+			s.Add(k, v)
+		}
+		expected := []string{"moment1"}
+		m1, err := time.Parse(time.DateTime, "2025-06-02 12:00:00")
+		if err != nil {
+			t.Fatal(err)
+		}
+		m2, err := time.Parse(time.DateTime, "2025-06-09 12:00:00")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Ignoring the result of the first Get.
+		s.Get(m1)
+		actual := s.Get(m2)
+
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("successive different gets", func(t *testing.T) {
+		s := NewScheduleStore()
+		for k, v := range moments {
+			s.Add(k, v)
+		}
+		expected := []string{"moment1"}
+		m1, err := time.Parse(time.DateTime, "2025-06-02 12:00:00")
+		if err != nil {
+			t.Fatal(err)
+		}
+		m2, err := time.Parse(time.DateTime, "2025-06-02 14:00:00")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Ignoring the result of the first Get.
+		s.Get(m2)
+		actual := s.Get(m1)
+
+		assert.Equal(t, expected, actual)
+	})
+
+}
+
+func Test_parseNotificationSchedule(t *testing.T) {
+	cases := []struct {
+		description string
+		input       string
+		expected    NotificationSchedule
+	}{
+		{
+			description: "single-day schedule",
+			input:       "M 12",
+			expected: NotificationSchedule{
+				Weekdays: Monday,
+				Hour:     12,
+			},
+		},
+		{
+			description: "multi-day schedule: days in order",
+			input:       "MTuW 13",
+			expected: NotificationSchedule{
+				Weekdays: Monday | Tuesday | Wednesday,
+				Hour:     13,
+			},
+		},
+		{
+			description: "multi-day schedule: days out of order",
+			input:       "WMTu 13",
+			expected: NotificationSchedule{
+				Weekdays: Monday | Tuesday | Wednesday,
+				Hour:     13,
+			},
+		},
+		{
+			description: "repeated days",
+			input:       "MM 15",
+			expected: NotificationSchedule{
+				Weekdays: Monday,
+				Hour:     15,
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			s, err := parseNotificationSchedule(c.input)
+			assert.NoError(t, err)
+			assert.Equal(t, c.expected, s)
+		})
+	}
+}
+
+func Test_parseNotificationSchedule_invalid(t *testing.T) {
+	cases := []struct {
+		description  string
+		input        string
+		errSubstring string
+	}{
+		{
+			description:  "missing time",
+			input:        "M",
+			errSubstring: `notification schedules must include days and an hour, separated by a space, such as "MWF 12"`,
+		},
+		{
+			description:  "missing days",
+			input:        "12",
+			errSubstring: `notification schedules must include days and an hour, separated by a space, such as "MWF 12"`,
+		},
+		{
+			description:  "empty input",
+			input:        "",
+			errSubstring: `notification schedules must include days and an hour, separated by a space, such as "MWF 12"`,
+		},
+		{
+			description:  "unexpected day",
+			input:        "MTW 12",
+			errSubstring: `not a valid notification schedule day: "T"`,
+		},
+		{
+			description:  "parts reversed",
+			input:        "12 MT",
+			errSubstring: `cannot convert MT into an hour while parsing a notification schedule: cannot be converted into an integer - did you swap the hour and days?`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			_, err := parseNotificationSchedule(c.input)
+			assert.ErrorContains(t, err, c.errSubstring)
 		})
 	}
 }
