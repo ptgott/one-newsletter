@@ -20,7 +20,6 @@ type Server interface {
 	// server during the test/suite after time t in Unix epoch seconds.
 	RetrieveEmails(t int64) ([]string, error)
 
-	// Address returns the address of the server. Getting this could vary
-	// between implementations, so we make it a method.
+	// Address returns the address of the server.
 	Address() string
 }

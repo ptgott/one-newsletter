@@ -105,12 +105,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	sched := userconfig.NewScheduleStore()
+	sched.Add(userconfig.DefaultScheduleName, checkedConfig.Scraping.Schedule)
+
 	log.Info().Str("configPath", *configPath).Msg("successfully validated the config")
 
-	scrapeCadence := time.NewTicker(config.Scraping.Interval)
 	scrapeConfig := scrape.Config{
-		TickCh:   scrapeCadence.C,
-		OutputWr: os.Stdout, // write to stdout if the -no-email flag is given
+		TickCh:        time.NewTicker(time.Minute).C,
+		OutputWr:      os.Stdout, // write to stdout if the -no-email flag is given
+		ScheduleStore: sched,
 	}
 
 	if err := scrape.StartLoop(&scrapeConfig, &checkedConfig); err != nil {
