@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ptgott/one-newsletter/linksrc"
+	"github.com/ptgott/one-newsletter/userconfig"
 )
 
 // BodySectionContent is used to populate email body templates
@@ -37,9 +38,6 @@ func NewBodySectionContent(s linksrc.Set) BodySectionContent {
 }
 
 // Template meant to be populated with a []linksrc.Set
-// Using tables for layout to avoid cross-client irregularities.
-// See here for best practices:
-// https://www.smashingmagazine.com/2017/01/introduction-building-sending-html-email-for-web-developers/#using-html-tables-for-layout
 const emailBodyHTML = `<html>
 <head>
 </head>
@@ -71,18 +69,18 @@ const emailBodyText = `{{ range . }}
 {{ end }}
 `
 
-// EmailData contains metadata for the body of an email to send
+// NewsletterEmailData contains metadata for the body of an email to send
 // with a newsletter etc. Since each linksrc.Set in linksets
 // comes from a different upstream, this is designed to support
 // concurrent access. You should create this with NewEmailData.
-type EmailData struct {
+type NewsletterEmailData struct {
 	content []BodySectionContent
 	mtx     *sync.Mutex
 }
 
-// NewEmailData safely creates an EmailData.
-func NewEmailData() *EmailData {
-	return &EmailData{
+// NewNewsletterEmailData safely creates an EmailData.
+func NewNewsletterEmailData() *NewsletterEmailData {
+	return &NewsletterEmailData{
 		content: []BodySectionContent{},
 		mtx:     &sync.Mutex{},
 	}
@@ -91,7 +89,7 @@ func NewEmailData() *EmailData {
 // Add stores a new linksrc.Set in the EmailData in a
 // goroutine-safe way. Callers must use Add for adding
 // linksrc.Sets to the EmailData.
-func (ed *EmailData) Add(s linksrc.Set) {
+func (ed *NewsletterEmailData) Add(s linksrc.Set) {
 	ed.mtx.Lock()
 	defer ed.mtx.Unlock()
 
@@ -100,7 +98,7 @@ func (ed *EmailData) Add(s linksrc.Set) {
 
 // populateEmailTemplate executes a package-local template with the provided
 // EmailData and performs any last-minute checks needed to do this.
-func populateEmailTemplate(ed *EmailData, tmp string) string {
+func populateEmailTemplate(ed *NewsletterEmailData, tmp string) string {
 	ed.mtx.Lock()
 	defer ed.mtx.Unlock()
 
@@ -116,7 +114,7 @@ func populateEmailTemplate(ed *EmailData, tmp string) string {
 // content. It's meant to include multiple sources of links in the same
 // email to reduce the number of emails we send. Any scraping- or parsing-
 // related error messages are included in the text.
-func (ed *EmailData) GenerateBody() string {
+func (ed *NewsletterEmailData) GenerateBody() string {
 	return populateEmailTemplate(ed, emailBodyHTML)
 }
 
@@ -124,6 +122,86 @@ func (ed *EmailData) GenerateBody() string {
 // content, satisfying the text/plain MIME type. It's meant to include multiple
 // sources of links in the same email to reduce the number of emails we send.
 // Any scraping- or parsing- related error messages are included in the text.
-func (ed *EmailData) GenerateText() string {
+func (ed *NewsletterEmailData) GenerateText() string {
 	return populateEmailTemplate(ed, emailBodyText)
+}
+
+// SummaryContent includes configuration details for a newsletter. Used to
+// summarize all configured newsletters in an initial email.
+type SummaryContent struct {
+	Name     string
+	Schedule string
+}
+
+// SummaryEmailData contains information for summarizing all configured
+// newsletters in an initial email.
+type SummaryEmailData struct {
+	Content []SummaryContent
+	mtx     *sync.Mutex
+}
+
+func NewSummaryEmailData(m *userconfig.Meta) SummaryEmailData {
+	content := make([]SummaryContent, len(m.Newsletters))
+	var i int
+	for k, n := range m.Newsletters {
+		content[i] = SummaryContent{
+			Name:     k,
+			Schedule: n.Schedule.String(),
+		}
+		i++
+	}
+	return SummaryEmailData{
+		Content: content,
+		mtx:     &sync.Mutex{},
+	}
+}
+
+// populateSummaryEmailTemplate executes a package-local template with the
+// provided SummaryEmailData and performs any last-minute checks needed to do this.
+func populateSummaryEmailTemplate(ed *SummaryEmailData, tmp string) string {
+	ed.mtx.Lock()
+	defer ed.mtx.Unlock()
+
+	var str strings.Builder
+	// The template text is constant, so suppressing the error
+	tmpl, _ := template.New("body").Parse(tmp)
+	tmpl.Execute(&str, ed.Content)
+
+	return str.String()
+}
+
+// summaryEmailBodyText is a template meant to be populated with a
+// []SummaryContent.  Meant to satisfy the text/plain MIME type.
+const summaryEmailBodyText = `You have configured the following newsletters:
+{{ range . -}}
+- {{.Name}}: {{.Schedule}}
+{{ end }}
+`
+
+// Template meant to be populated with a []SummaryContent.
+// Using tables for layout to avoid cross-client irregularities.
+const summaryEmailBodyHTML = `<html>
+<head>
+</head>
+<body>
+	<p>You have configured the following newsletters:</p>
+	<ul>
+	{{ range . }}
+	    <li>{{.Name}}: {{.Schedule}}</li>
+	{{ end }}
+	</ul>
+</body>
+</html>`
+
+// GenerateText produces an email body to send based on the unformatted
+// content, satisfying the text/plain MIME type. It's meant to include a summary
+// of configured newsletters to include in an initial email.
+func (ed *SummaryEmailData) GenerateText() string {
+	return populateSummaryEmailTemplate(ed, summaryEmailBodyText)
+}
+
+// GenerateBody produces an HTML email body to send based on the unformatted
+// content.
+func (ed *SummaryEmailData) GenerateBody() string {
+	return populateSummaryEmailTemplate(ed, summaryEmailBodyHTML)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/ptgott/one-newsletter/smtptest"
 	"github.com/ptgott/one-newsletter/userconfig"
 	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -46,10 +47,9 @@ func fakeTickChan(count int) (userconfig.NotificationSchedule, []time.Time) {
 	return sched, c
 }
 
-// Check that the number of emails sent is within the expected range.
-// Declare a test environment with a number of fake e-publications, run the
-// application as a child process, wait for an interval, then stop the
-// subprocess to count emails sent.
+// Check that the number of emails sent is within the expected range. Declare a
+// test environment with a number of fake e-publications, run the application,
+// wait for an interval, then stop the subprocess to count emails sent.
 func TestNewsletterEmailSending(t *testing.T) {
 	expectedEmails := 3
 	epubs := 3
@@ -87,9 +87,13 @@ func TestNewsletterEmailSending(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule:    sched,
+				},
+			},
 			Scraping: userconfig.Scraping{
-				Schedule:       sched,
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -100,7 +104,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 
 	ch := make(chan time.Time, 1)
 	store := userconfig.NewScheduleStore()
-	store.Add("myschedule", sched)
+	store.Add("mynewsletter", sched)
 	scrapeConfig := scrape.Config{
 		ScheduleStore: store,
 		TickCh:        ch,
@@ -173,12 +177,17 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
+
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -187,13 +196,24 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 		panic(fmt.Sprintf("can't create the app config: %v", err))
 	}
 
-	// Closing the channel immediately since we're relying on the initial
-	// email sent in StartLoop.
+	// We want to test the second email, since the first is a summary. Start
+	// a fake tick channel for one email. The first should send right away
+	// before the ticks start.
+	sched, ticks := fakeTickChan(1)
 	ch := make(chan time.Time, 1)
-	close(ch)
+	store := userconfig.NewScheduleStore()
+	store.Add("mynewsletter", sched)
 	scrapeConfig := scrape.Config{
-		TickCh: ch,
+		ScheduleStore: store,
+		TickCh:        ch,
 	}
+
+	go func() {
+		for i := range ticks {
+			ch <- ticks[i]
+		}
+		close(ch)
+	}()
 
 	scrape.StartLoop(&scrapeConfig, &config)
 	// Wait for the application to poll the link site, check for emails,
@@ -203,26 +223,43 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not retrieve emails before the update: %v", err)
 	}
-	if len(em1) == 0 {
-		t.Fatal("retrieved zero emails before the update")
-	}
-	before := em1[0] // should just be one email at this point
+
+	// There should be an initial summary email and a newsletter.
+	require.Equal(t, 2, len(em1))
+
+	// Check the link newsletter
+	before := em1[1]
 	log.Info().Msg("updating the mock link sites")
 	testenv.update(linksToUpdate)
 	ut := time.Now().UnixNano()
 	log.Info().Msg("finished updating the mock link sites")
+
+	// Start another tick channel to test the update.
+	sched, ticks = fakeTickChan(1)
+	ch = make(chan time.Time, 1)
+	store = userconfig.NewScheduleStore()
+	store.Add("mynewsletter", sched)
+	scrapeConfig = scrape.Config{
+		ScheduleStore: store,
+		TickCh:        ch,
+	}
+
+	go func() {
+		for i := range ticks {
+			ch <- ticks[i]
+		}
+		close(ch)
+	}()
 
 	scrape.StartLoop(&scrapeConfig, &config)
 	em2, err := testenv.SMTPServer.RetrieveEmails(ut)
 	if err != nil {
 		t.Errorf("can't retrieve emails after the update: %v", err)
 	}
-	if len(em2) == 0 {
-		t.Fatal("retrieved zero emails after the update")
-	}
+	// As before, there should be an initial summary email and a newsletter.
+	require.Equal(t, 2, len(em2))
 
-	// There should just be one email after filtering by time
-	after := em2[0]
+	after := em2[1]
 
 	linksBefore := smtptest.ExtractItems(before)
 	linksAfter := smtptest.ExtractItems(after)
@@ -290,12 +327,17 @@ func TestMaxLinkLimits(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
+
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -407,12 +449,16 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -423,7 +469,7 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 
 	ch := make(chan time.Time, 1)
 	store := userconfig.NewScheduleStore()
-	store.Add("myschedule", sched)
+	store.Add("mynewsletter", sched)
 	scrapeConfig := scrape.Config{
 		ScheduleStore: store,
 		TickCh:        ch,
@@ -487,14 +533,19 @@ func TestTestModeFlag(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				TestMode: true, // This is important here
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
+				TestMode:       true, // This is important here
 				StorageDirPath: testenv.tempDirPath,
+				NewsletterName: "mynewsletter",
 			},
 		},
 	)
@@ -573,14 +624,19 @@ func TestOneOffFlag(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
 				StorageDirPath: testenv.tempDirPath,
 				OneOff:         true, // This is important here
+				NewsletterName: "mynewsletter",
 			},
 		},
 	)
@@ -663,15 +719,20 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
+				},
+			},
 			Scraping: userconfig.Scraping{
 				// Note that both TestMode and OneOff are true here.
-				TestMode: true,
-				OneOff:   true,
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
-				},
+				TestMode:       true,
+				OneOff:         true,
+				NewsletterName: "mynewsletter",
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -717,4 +778,118 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 		)
 	}
 
+}
+
+func TestMultipleNewsletterEmailSending(t *testing.T) {
+	epubs := 3
+	linksPerPub := 5
+	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
+		numHTTPServers: epubs,
+		numLinks:       linksPerPub,
+	})
+	defer testenv.tearDown()
+	if err != nil {
+		t.Fatalf("error starting test environment: %v", err)
+	}
+
+	scheds := []userconfig.NotificationSchedule{
+		{
+			Weekdays: userconfig.Monday,
+			Hour:     12,
+		},
+		{
+			Weekdays: userconfig.Monday,
+			Hour:     15,
+		},
+		{
+			Weekdays: userconfig.Monday,
+			Hour:     20,
+		},
+	}
+
+	ticks := make([]time.Time, len(scheds))
+	for i, s := range scheds {
+		t, err := time.Parse(time.DateOnly, "2025-06-09")
+		if err != nil {
+			panic(err) // Shouldn't be an error since there's a hardcoded input
+		}
+
+		ticks[i] = t.Add(time.Duration(s.Hour) * time.Hour)
+	}
+
+	// Configure link site checks for each fake e-publicaiton we've spun up.
+	urls := testenv.urls()
+	srcs := make([]linksrc.Config, len(urls), len(urls))
+	for i := range urls {
+		// not expecting errors since these URLs are guaranteed to be
+		// for running servers, and don't come from user input
+		pu, _ := url.Parse(urls[i])
+
+		srcs[i] = linksrc.Config{
+			URL:  *pu,
+			Name: fmt.Sprintf("site-%v", pu.Port()),
+		}
+	}
+
+	store := userconfig.NewScheduleStore()
+	newsletters := make(map[string]userconfig.Newsletter)
+	for i, c := range srcs {
+		nl := fmt.Sprintf("mynewsletter%v", i)
+		newsletters[nl] = userconfig.Newsletter{
+			LinkSources: []linksrc.Config{
+				c,
+			},
+			Schedule: scheds[i],
+		}
+		store.Add(nl, scheds[i])
+	}
+
+	hostport := strings.Split(testenv.SMTPServer.Address(), ":")
+	config, err := createUserConfig(
+		userconfig.Meta{
+			EmailSettings: email.UserConfig{
+				SMTPServerHost: hostport[0],
+				SMTPServerPort: hostport[1],
+			},
+			Newsletters: newsletters,
+			Scraping: userconfig.Scraping{
+				StorageDirPath: testenv.tempDirPath,
+			},
+		},
+	)
+	if err != nil {
+		panic(fmt.Sprintf("can't create the app config: %v", err))
+	}
+
+	ch := make(chan time.Time, 1)
+	scrapeConfig := scrape.Config{
+		ScheduleStore: store,
+		TickCh:        ch,
+	}
+
+	go func() {
+		for i := range ticks {
+			ch <- ticks[i]
+		}
+		close(ch)
+	}()
+
+	scrape.StartLoop(&scrapeConfig, &config)
+
+	ems, err := testenv.SMTPServer.RetrieveEmails(0)
+
+	if err != nil {
+		t.Errorf("can't retrieve email from the test SMTP server: %v", err)
+	}
+
+	expectedCount := len(scheds) + 1
+	// There should be one email per polling interval, plus the initial
+	// email (which is sent right away).
+	if len(ems) != expectedCount {
+		t.Errorf(
+			"expecting %v emails but got %v",
+			expectedCount,
+			len(ems),
+		)
+	}
 }

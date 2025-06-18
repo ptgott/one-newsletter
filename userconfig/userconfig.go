@@ -23,7 +23,8 @@ import (
 type Meta struct {
 	Scraping      Scraping         `yaml:"scraping"`
 	EmailSettings email.UserConfig `yaml:"email"`
-	LinkSources   []linksrc.Config `yaml:"link_sources"`
+	// Newsletters is a map of newsletter names to newsletter configs
+	Newsletters map[string]Newsletter `yaml:"newsletters"`
 }
 
 // Weekdays is a bitmap indicating the days of the week in which to send a
@@ -50,6 +51,16 @@ var allDays [7]Weekdays = [7]Weekdays{
 	Sunday,
 }
 
+var daysToString map[Weekdays]string = map[Weekdays]string{
+	Monday:    "Mondays",
+	Tuesday:   "Tuesdays",
+	Wednesday: "Wednesdays",
+	Thursday:  "Thursdays",
+	Friday:    "Fridays",
+	Saturday:  "Saturdays",
+	Sunday:    "Sundays",
+}
+
 var daysToTime map[Weekdays]time.Weekday = map[Weekdays]time.Weekday{
 	Monday:    time.Monday,
 	Tuesday:   time.Tuesday,
@@ -65,6 +76,20 @@ const DefaultScheduleName = "newsletter"
 type NotificationSchedule struct {
 	Weekdays Weekdays
 	Hour     int
+}
+
+func (n NotificationSchedule) String() string {
+	var s strings.Builder
+	var days []string
+	for _, d := range allDays {
+		if n.Weekdays&d == 0 {
+			continue
+		}
+		days = append(days, daysToString[d])
+		s.WriteString(strings.Join(days, ", "))
+	}
+	s.WriteString(" at " + strconv.Itoa(n.Hour) + ":00")
+	return s.String()
 }
 
 // Moment specifies attributes of a time as returned by methods of
@@ -143,16 +168,23 @@ func (s *ScheduleStore) Get(t time.Time) []string {
 // Scraping contains config options that apply to One Newsletter's scraping
 // behavior
 type Scraping struct {
-	Schedule       NotificationSchedule
 	StorageDirPath string
-	// Run the scraper once, then exit
-	OneOff bool
-	// Print the HTML body of a single email to stdout and exit to help test
+	// OneOff runs the scraper once, then exits
+	OneOff bool `yaml:"one_off"`
+	// TestMode prints the HTML body of a single email to stdout and exit to help test
 	// configuration.
-	TestMode bool
-	// Number of days we keep a link in the database before marking it
-	// expired.
+	TestMode bool `yaml:"test_mode"`
+	// NewsletterName indicates the name of the newsletter to send in
+	// one-off or test mode.
+	NewsletterName string `yaml:"newsletter_name"`
+	// LinkExpiryDay is the number of days we keep a link in the database
+	// before marking it expired.
 	LinkExpiryDays uint
+}
+
+type Newsletter struct {
+	Schedule    NotificationSchedule
+	LinkSources []linksrc.Config `yaml:"link_sources"`
 }
 
 // CheckAndSetDefaults validates s and either returns a copy of s with default
@@ -197,17 +229,21 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	s.LinkExpiryDays = uint(lid)
 
-	ni, ok := v["schedule"]
-	if !ok {
-		return errors.New("the configuration must provide a notification schedule")
+	return nil
+}
+
+func (n *NotificationSchedule) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var v string
+	if err := unmarshal(&v); err != nil {
+		return errors.New("notification schedule is not a string")
 	}
 
-	n, err := parseNotificationSchedule(ni)
+	s, err := parseNotificationSchedule(v)
 	if err != nil {
-		return fmt.Errorf("cannot parse the notification schedule: %w", err)
+		return fmt.Errorf("invalid notification schedule: %w", err)
 	}
-	s.Schedule = n
 
+	n = &s
 	return nil
 }
 
@@ -228,13 +264,21 @@ func (m *Meta) CheckAndSetDefaults() (Meta, error) {
 	}
 	c.EmailSettings = e
 
-	c.LinkSources = make([]linksrc.Config, len(m.LinkSources))
-	for n, s := range m.LinkSources {
-		ns, err := s.CheckAndSetDefaults()
-		if err != nil {
-			return Meta{}, err
+	c.Newsletters = make(map[string]Newsletter)
+	for i, v := range m.Newsletters {
+		nn := Newsletter{
+			LinkSources: make([]linksrc.Config, len(v.LinkSources)),
+			Schedule:    v.Schedule,
 		}
-		c.LinkSources[n] = ns
+		for p, s := range v.LinkSources {
+			ns, err := s.CheckAndSetDefaults()
+			if err != nil {
+				return Meta{}, err
+			}
+			nn.LinkSources[p] = ns
+		}
+
+		c.Newsletters[i] = nn
 	}
 
 	return c, nil
@@ -261,8 +305,16 @@ func Parse(r io.Reader) (*Meta, error) {
 		return &Meta{}, errors.New("must include a \"scraping\" section")
 	}
 
-	if len(m.LinkSources) == 0 {
-		return &Meta{}, errors.New("must include at least one item within \"link_sources\"")
+	if len(m.Newsletters) == 0 {
+		return &Meta{}, errors.New("must include at least one item within \"newsletters\"")
+	}
+
+	// TODO: Move the link sources checking into the unmarshaler for
+	// userconfig.Newsletter
+	for _, n := range m.Newsletters {
+		if len(n.LinkSources) == 0 {
+			return &Meta{}, errors.New("must include at least one item within \"link_sources\"")
+		}
 	}
 
 	// Since this is a one-off or a test, set the data directory to an

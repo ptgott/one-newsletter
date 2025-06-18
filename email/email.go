@@ -40,7 +40,6 @@ type UserConfig struct {
 // CheckAndSetDefaults validates s and either returns a copy of c with default
 // settings applied or returns an error due to an invalid configuration
 func (c *UserConfig) CheckAndSetDefaults() (UserConfig, error) {
-
 	uc := *c
 
 	if c.SkipCertVerification == true {
@@ -142,7 +141,6 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // `text/html` type in asHTML. A lack of an error means the message was
 // received by the destination SMTP server.
 func (uc UserConfig) SendNewsletter(asText, asHTML []byte) error {
-
 	auth := smtp.PlainAuth("", uc.UserName, uc.Password, uc.SMTPServerHost)
 
 	// Write the email body. It will have the following MIME entities.
