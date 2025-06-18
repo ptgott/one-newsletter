@@ -2,6 +2,7 @@ package scrape
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -198,18 +199,17 @@ func StartLoop(s *Config, c *userconfig.Meta) error {
 		}
 		newsletters := s.ScheduleStore.Get(tk)
 
-		// TODO: Pass in a map of newsletter names to newsletters.
-		// Possibly change the structure of userconfig.Meta so the
-		// newsletter config is a map of names to newsletter configs.
-		// Look up each newsletter name from the map to determine which
-		// newsletters to send.
-		if len(newsletters) == 0 {
-			continue
+		for _, n := range newsletters {
+			l, ok := c.Newsletters[n]
+			if !ok {
+				return fmt.Errorf("unable to find a configuration for newsletter %v - this is a bug", n)
+			}
+			err := Run(s.OutputWr, c.Scraping, c.EmailSettings, l)
+			if err != nil {
+				return err
+			}
 		}
-		err := Run(s.OutputWr, c)
-		if err != nil {
-			return err
-		}
+
 	}
 	return nil
 }

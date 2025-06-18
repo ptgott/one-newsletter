@@ -23,7 +23,8 @@ import (
 type Meta struct {
 	Scraping      Scraping         `yaml:"scraping"`
 	EmailSettings email.UserConfig `yaml:"email"`
-	Newsletters   []Newsletter     `yaml:"newsletters"`
+	// Newsletters is a map of newsletter names to newsletter configs
+	Newsletters map[string]Newsletter `yaml:"newsletters"`
 }
 
 // Weekdays is a bitmap indicating the days of the week in which to send a
@@ -155,7 +156,6 @@ type Scraping struct {
 }
 
 type Newsletter struct {
-	Name        string
 	Schedule    NotificationSchedule
 	LinkSources []linksrc.Config `yaml:"link_sources"`
 }
@@ -243,11 +243,10 @@ func (m *Meta) CheckAndSetDefaults() (Meta, error) {
 	}
 	c.EmailSettings = e
 
-	c.Newsletters = make([]Newsletter, len(m.Newsletters))
-	for i := range m.Newsletters {
-		c.Newsletters[i] = m.Newsletters[i]
-		c.Newsletters[i].LinkSources = make([]linksrc.Config, len(m.Newsletters[i].LinkSources))
-		for n, s := range m.Newsletters[i].LinkSources {
+	c.Newsletters = make(map[string]Newsletter)
+	for i, v := range m.Newsletters {
+		v.LinkSources = make([]linksrc.Config, len(m.Newsletters[i].LinkSources))
+		for n, s := range v.LinkSources {
 			ns, err := s.CheckAndSetDefaults()
 			if err != nil {
 				return Meta{}, err
@@ -255,6 +254,7 @@ func (m *Meta) CheckAndSetDefaults() (Meta, error) {
 			c.Newsletters[i].LinkSources[n] = ns
 		}
 
+		c.Newsletters[i] = v
 	}
 
 	return c, nil

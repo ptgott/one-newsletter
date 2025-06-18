@@ -106,7 +106,9 @@ func main() {
 	}
 
 	sched := userconfig.NewScheduleStore()
-	sched.Add(userconfig.DefaultScheduleName, checkedConfig.Scraping.Schedule)
+	for k, v := range checkedConfig.Newsletters {
+		sched.Add(k, v.Schedule)
+	}
 
 	log.Info().Str("configPath", *configPath).Msg("successfully validated the config")
 
