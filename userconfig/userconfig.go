@@ -23,7 +23,7 @@ import (
 type Meta struct {
 	Scraping      Scraping         `yaml:"scraping"`
 	EmailSettings email.UserConfig `yaml:"email"`
-	LinkSources   []linksrc.Config `yaml:"link_sources"`
+	Newsletters   []Newsletter     `yaml:"newsletters"`
 }
 
 // Weekdays is a bitmap indicating the days of the week in which to send a
@@ -143,7 +143,6 @@ func (s *ScheduleStore) Get(t time.Time) []string {
 // Scraping contains config options that apply to One Newsletter's scraping
 // behavior
 type Scraping struct {
-	Schedule       NotificationSchedule
 	StorageDirPath string
 	// Run the scraper once, then exit
 	OneOff bool
@@ -153,6 +152,12 @@ type Scraping struct {
 	// Number of days we keep a link in the database before marking it
 	// expired.
 	LinkExpiryDays uint
+}
+
+type Newsletter struct {
+	Name        string
+	Schedule    NotificationSchedule
+	LinkSources []linksrc.Config `yaml:"link_sources"`
 }
 
 // CheckAndSetDefaults validates s and either returns a copy of s with default
@@ -197,6 +202,16 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	s.LinkExpiryDays = uint(lid)
 
+	return nil
+}
+
+func (r *Newsletter) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	v := make(map[string]string)
+	err := unmarshal(&v)
+	if err != nil {
+		return fmt.Errorf("can't parse the newsletter config: %v", err)
+	}
+
 	ni, ok := v["schedule"]
 	if !ok {
 		return errors.New("the configuration must provide a notification schedule")
@@ -206,7 +221,7 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err != nil {
 		return fmt.Errorf("cannot parse the notification schedule: %w", err)
 	}
-	s.Schedule = n
+	r.Schedule = n
 
 	return nil
 }
@@ -228,13 +243,18 @@ func (m *Meta) CheckAndSetDefaults() (Meta, error) {
 	}
 	c.EmailSettings = e
 
-	c.LinkSources = make([]linksrc.Config, len(m.LinkSources))
-	for n, s := range m.LinkSources {
-		ns, err := s.CheckAndSetDefaults()
-		if err != nil {
-			return Meta{}, err
+	c.Newsletters = make([]Newsletter, len(m.Newsletters))
+	for i := range m.Newsletters {
+		c.Newsletters[i] = m.Newsletters[i]
+		c.Newsletters[i].LinkSources = make([]linksrc.Config, len(m.Newsletters[i].LinkSources))
+		for n, s := range m.Newsletters[i].LinkSources {
+			ns, err := s.CheckAndSetDefaults()
+			if err != nil {
+				return Meta{}, err
+			}
+			c.Newsletters[i].LinkSources[n] = ns
 		}
-		c.LinkSources[n] = ns
+
 	}
 
 	return c, nil
@@ -261,8 +281,11 @@ func Parse(r io.Reader) (*Meta, error) {
 		return &Meta{}, errors.New("must include a \"scraping\" section")
 	}
 
-	if len(m.LinkSources) == 0 {
-		return &Meta{}, errors.New("must include at least one item within \"link_sources\"")
+	for _, n := range m.Newsletters {
+
+		if len(n.LinkSources) == 0 {
+			return &Meta{}, errors.New("must include at least one item within \"link_sources\"")
+		}
 	}
 
 	// Since this is a one-off or a test, set the data directory to an
