@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ptgott/one-newsletter/email"
 	"github.com/ptgott/one-newsletter/html"
 	"github.com/ptgott/one-newsletter/linksrc"
 	"github.com/ptgott/one-newsletter/storage"
@@ -28,7 +29,7 @@ type Config struct {
 // encountered. It reads the user config anew at the beginning of each cycle. At
 // the end of a scrape cycle, it sends an email or, depending on the config,
 // writes a plaintext version of the email message to outwr.
-func Run(outwr io.Writer, config *userconfig.Meta) error {
+func Run(outwr io.Writer, scraping userconfig.Scraping, emailSettings email.UserConfig, newsletter userconfig.Newsletter) error {
 	httpClient := http.Client{
 		// Determined arbitrarily. We don't want to wait forever for a
 		// request to complete, but the cadence of the newsletter means
@@ -37,13 +38,13 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 	}
 
 	var db storage.KeyValue
-	if config.Scraping.TestMode || config.Scraping.OneOff {
+	if scraping.TestMode || scraping.OneOff {
 		db = &storage.NoOpDB{}
 	} else {
 		var err error
 		db, err = storage.NewBadgerDB(
-			config.Scraping.StorageDirPath,
-			time.Duration(config.Scraping.LinkExpiryDays*24)*time.Hour,
+			scraping.StorageDirPath,
+			time.Duration(scraping.LinkExpiryDays*24)*time.Hour,
 		)
 		if err != nil {
 			return err
@@ -52,17 +53,16 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 
 	log.Info().Msg("set up the database connection successfully")
 	log.Info().
-		Int("count", len(config.LinkSources)).
 		Msg("launching scrapers")
 	var wg sync.WaitGroup
 	d := html.NewEmailData()
 
 	// buffer the results of the latest scrape so we can perform a diff
 	// with the previous scrape and build an email body
-	emailBuildCh := make(chan linksrc.Set, len(config.LinkSources))
-	wg.Add(len(config.LinkSources))
+	emailBuildCh := make(chan linksrc.Set, len(newsletter.LinkSources))
+	wg.Add(len(newsletter.LinkSources))
 	var ec chan error
-	for _, ls := range config.LinkSources {
+	for _, ls := range newsletter.LinkSources {
 		go func(
 			lc linksrc.Config,
 			g *sync.WaitGroup,
@@ -151,7 +151,7 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 	txt := d.GenerateText()
 	log.Info().Msg("attempting to send an email")
 
-	if config.Scraping.TestMode {
+	if scraping.TestMode {
 		if outwr == nil {
 			log.Warn().Msg(
 				"a writer is unavailable for receiving the output message",
@@ -163,7 +163,7 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 			}
 		}
 	} else {
-		err = config.EmailSettings.SendNewsletter([]byte(txt), []byte(bod))
+		err = emailSettings.SendNewsletter([]byte(txt), []byte(bod))
 		if err != nil {
 			log.Error().Err(err).Msg("error sending an email")
 		}
@@ -176,11 +176,15 @@ func Run(outwr io.Writer, config *userconfig.Meta) error {
 // interval as specified in the provided config. If an s.ErrCh is provided,
 // sends any errors to it. Send a struct{} to sc to stop the scraper.
 func StartLoop(s *Config, c *userconfig.Meta) error {
-	// Run the first scrape immediately
-	err := Run(s.OutputWr, c)
-	if err != nil {
-		return err
-	}
+	// TODO: Make the initial newsletter a confirmation that lists
+	// information about all the newsletters we plan to send. Change the Run
+	// call commented out below to reflect this.
+	//
+	// 	// Run the first scrape immediately
+	// 	err := Run(s.OutputWr, c)
+	// 	if err != nil {
+	// 		return err
+	// 	}
 
 	// Only running the loop once
 	if c.Scraping.OneOff || c.Scraping.TestMode {
@@ -194,11 +198,11 @@ func StartLoop(s *Config, c *userconfig.Meta) error {
 		}
 		newsletters := s.ScheduleStore.Get(tk)
 
-		// This is awkward now, but when we make it possible to
-		// send multiple newsletters, we can pass a map of
-		// newsletter names to configs to StartLoop, then look
-		// up each newsletter name from the map to determine
-		// which newsletters to send.
+		// TODO: Pass in a map of newsletter names to newsletters.
+		// Possibly change the structure of userconfig.Meta so the
+		// newsletter config is a map of names to newsletter configs.
+		// Look up each newsletter name from the map to determine which
+		// newsletters to send.
 		if len(newsletters) == 0 {
 			continue
 		}

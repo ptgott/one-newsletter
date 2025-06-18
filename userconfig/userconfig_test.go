@@ -181,17 +181,12 @@ func TestScrapingUnmarshalYAML(t *testing.T) {
 			shouldBeError: false,
 			input: `storageDir: ./tempTestDir3012705204
 linkExpiryDays: 100
-schedule: "M 12"
 `,
 			expected: Scraping{
 				StorageDirPath: "./tempTestDir3012705204",
 				OneOff:         false,
 				TestMode:       false,
 				LinkExpiryDays: 100,
-				Schedule: NotificationSchedule{
-					Weekdays: Monday,
-					Hour:     12,
-				},
 			},
 		},
 		{
