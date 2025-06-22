@@ -532,7 +532,7 @@ func TestHighestRepeatingContainers(t *testing.T) {
 			ns := cascadia.MustCompile(tc.linkSelector).MatchAll(n)
 			rcs, err := highestRepeatingContainers(ns)
 			if (err != nil) != tc.expectError {
-				t.Errorf("expected error status of %v but got %v with error %w", tc.expectError, err != nil, err)
+				t.Errorf("expected error status of %v but got %v with error %v", tc.expectError, err != nil, err)
 			}
 			if len(rcs) != tc.expectedlinkContainerCount {
 				t.Fatalf("expected %v link containers but got %v", tc.expectedlinkContainerCount, len(rcs))

@@ -105,7 +105,7 @@ linkSelector: "123"`,
 			var c Config
 			if err := dec.Decode(&c); (err != nil) != tc.shouldBeError {
 				t.Errorf(
-					"expected error status of %v but got %v with error %w",
+					"expected error status of %v but got %v with error %v",
 					tc.shouldBeError,
 					err != nil,
 					err,
@@ -166,7 +166,7 @@ minElementWords: 3
 			var c Config
 			if err := dec.Decode(&c); (err != nil) != tc.expectErr {
 				t.Errorf(
-					"expected error status of %v but got %v with error %w",
+					"expected error status of %v but got %v with error %v",
 					tc.expectErr,
 					err != nil,
 					err,
@@ -248,7 +248,7 @@ func TestValidateURL(t *testing.T) {
 			_, err := parseURL(tc.value)
 
 			if v := err == nil; v != tc.shouldBeValid {
-				t.Errorf("Unexpected error status for %v\nWanted: %v\nGot: %v\nError: %w", tc.value, tc.shouldBeValid, v, err)
+				t.Errorf("Unexpected error status for %v\nWanted: %v\nGot: %v\nError: %v", tc.value, tc.shouldBeValid, v, err)
 			}
 		})
 
@@ -320,7 +320,7 @@ func TestValidateCSSSelector(t *testing.T) {
 			_, err := parseCSSSelector(tc.value)
 
 			if v := err == nil; v != tc.shouldBeValid {
-				t.Errorf("Unexpected error status for %v\nWanted: %v\nGot: %v\nError: %w", tc.value, tc.shouldBeValid, v, err)
+				t.Errorf("Unexpected error status for %v\nWanted: %v\nGot: %v\nError: %v", tc.value, tc.shouldBeValid, v, err)
 			}
 		})
 	}

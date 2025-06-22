@@ -90,7 +90,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	err := unmarshal(&v)
 
 	if err != nil {
-		return fmt.Errorf("can't parse the email config: %w", err)
+		return fmt.Errorf("can't parse the email config: %v", err)
 	}
 
 	n, ok := v["name"]
@@ -105,7 +105,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	u, err := parseURL(v["url"])
 	if err != nil {
-		return fmt.Errorf("can't parse the link source URL: %w", err)
+		return fmt.Errorf("can't parse the link source URL: %v", err)
 	}
 	c.URL = u
 
@@ -127,7 +127,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if _, ok := v["itemSelector"]; ok {
 		is, err := parseCSSSelector(v["itemSelector"])
 		if err != nil {
-			return fmt.Errorf("cannot parse itemSelector: %w", err)
+			return fmt.Errorf("cannot parse itemSelector: %v", err)
 		}
 		if err == nil {
 			c.ItemSelector = is
@@ -137,7 +137,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if _, ok := v["captionSelector"]; ok {
 		cs, err := parseCSSSelector(v["captionSelector"])
 		if err != nil {
-			return fmt.Errorf("cannot parse captionSelector: %w", err)
+			return fmt.Errorf("cannot parse captionSelector: %v", err)
 		}
 		if err == nil {
 			c.CaptionSelector = cs
@@ -147,7 +147,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if _, ok := v["linkSelector"]; ok {
 		ls, err := parseCSSSelector(v["linkSelector"])
 		if err != nil {
-			return fmt.Errorf("cannot parse linkSelector: %w", err)
+			return fmt.Errorf("cannot parse linkSelector: %v", err)
 		}
 		if err == nil {
 			c.LinkSelector = ls

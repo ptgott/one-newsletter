@@ -59,7 +59,7 @@ func NewBadgerDB(sd string, ttl time.Duration) (*BadgerDB, error) {
 	)
 
 	if err != nil {
-		return &BadgerDB{}, fmt.Errorf("can't open the db connection: %w", err)
+		return &BadgerDB{}, fmt.Errorf("can't open the db connection: %v", err)
 	}
 
 	return &BadgerDB{
@@ -74,12 +74,12 @@ func (db *BadgerDB) Put(entry KVEntry) error {
 		e := badger.NewEntry(entry.Key, entry.Value).WithTTL(db.keyTTL)
 		err := txn.SetEntry(e)
 		if err != nil {
-			return fmt.Errorf("could not set the KV pair: %w", err)
+			return fmt.Errorf("could not set the KV pair: %v", err)
 		}
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("transaction failed: %w", err)
+		return fmt.Errorf("transaction failed: %v", err)
 	}
 	return nil
 }
@@ -93,7 +93,7 @@ func (db *BadgerDB) Read(key []byte) (KVEntry, error) {
 		item, err := txn.Get(key)
 
 		if err != nil {
-			return fmt.Errorf("can't retrieve a value for the key provided: %w", err)
+			return fmt.Errorf("can't retrieve a value for the key provided: %v", err)
 		}
 
 		err = item.Value(func(v []byte) error {
@@ -103,7 +103,7 @@ func (db *BadgerDB) Read(key []byte) (KVEntry, error) {
 		})
 
 		if err != nil {
-			return fmt.Errorf("can't retrieve the value from the database: %w", err)
+			return fmt.Errorf("can't retrieve the value from the database: %v", err)
 		}
 
 		return nil

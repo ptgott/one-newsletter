@@ -181,7 +181,7 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	v := make(map[string]string)
 	err := unmarshal(&v)
 	if err != nil {
-		return fmt.Errorf("can't parse the user config: %w", err)
+		return fmt.Errorf("can't parse the user config: %v", err)
 	}
 
 	sp, ok := v["storageDir"]
@@ -262,7 +262,7 @@ func Parse(r io.Reader) (*Meta, error) {
 	var m Meta
 	err := yaml.NewDecoder(r).Decode(&m)
 	if err != nil {
-		return &Meta{}, fmt.Errorf("can't read the config file as YAML: %w", err)
+		return &Meta{}, fmt.Errorf("can't read the config file as YAML: %v", err)
 	}
 
 	var es email.UserConfig = email.UserConfig{}

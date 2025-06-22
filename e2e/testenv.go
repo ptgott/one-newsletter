@@ -45,7 +45,7 @@ func startTestEnvironment(t *testing.T, c testEnvironmentConfig) (*testEnvironme
 	// Ignore errors due to the fact that the directory already exists
 	if err != nil && !errors.Is(err, os.ErrExist) {
 		// Shouldn't happen
-		return te, fmt.Errorf("could not create the test storage directory: %w", err)
+		return te, fmt.Errorf("could not create the test storage directory: %v", err)
 	}
 
 	te.tempDirPath = p
