@@ -64,7 +64,6 @@ func TestNewsletterEmailSending(t *testing.T) {
 		t.Fatalf("error starting test environment: %v", err)
 	}
 
-	// One email gets sent right away, so make a tick channel for the rest.
 	sched, ticks := fakeTickChan(expectedEmails)
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
@@ -468,6 +467,7 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 // Test that the -test flag causes email bodies to be printed to stdout,
 // and that no emails are sent.
 func TestTestModeFlag(t *testing.T) {
+	expectedEmails := 1
 	// Ensure that all emails are the result of polling a single e-publication
 	epubs := 1
 	linksPerPub := 5
@@ -481,6 +481,8 @@ func TestTestModeFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error starting test environment: %v", err)
 	}
+
+	sched, ticks := fakeTickChan(expectedEmails)
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
@@ -506,10 +508,7 @@ func TestTestModeFlag(t *testing.T) {
 			Newsletters: map[string]userconfig.Newsletter{
 				"mynewsletter": userconfig.Newsletter{
 					LinkSources: u,
-					Schedule: userconfig.NotificationSchedule{
-						Weekdays: userconfig.Monday,
-						Hour:     12,
-					},
+					Schedule:    sched,
 				},
 			},
 			Scraping: userconfig.Scraping{
@@ -527,11 +526,17 @@ func TestTestModeFlag(t *testing.T) {
 	// Closing the channel immediately since we're relying on the initial
 	// email sent in StartLoop.
 	ch := make(chan time.Time, 1)
-	close(ch)
 	scrapeConfig := scrape.Config{
 		TickCh:   ch,
 		OutputWr: &msg,
 	}
+
+	go func() {
+		for i := range ticks {
+			ch <- ticks[i]
+		}
+		close(ch)
+	}()
 
 	scrape.StartLoop(&scrapeConfig, &config)
 

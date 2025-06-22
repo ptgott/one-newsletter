@@ -191,6 +191,13 @@ func StartLoop(s *Config, c *userconfig.Meta) error {
 
 	// Only running the loop once
 	if c.Scraping.OneOff || c.Scraping.TestMode {
+		// TODO: Require a --name flag for OneOff or TestMode. Use this to
+		// look up a newsletter and send it.
+		// 		err := Run(s.OutputWr, c)
+		// 		if err != nil {
+		// 			return err
+		// 		}
+
 		return nil
 	}
 
