@@ -206,7 +206,7 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 func (r *Newsletter) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	v := make(map[string]string)
+	v := make(map[string]interface{})
 	err := unmarshal(&v)
 	if err != nil {
 		return fmt.Errorf("can't parse the newsletter config: %v", err)
@@ -217,7 +217,12 @@ func (r *Newsletter) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return errors.New("the configuration must provide a notification schedule")
 	}
 
-	n, err := parseNotificationSchedule(ni)
+	s, ok := ni.(string)
+	if !ok {
+		return errors.New("cannot parse the notification schedule: not a string")
+	}
+
+	n, err := parseNotificationSchedule(s)
 	if err != nil {
 		return fmt.Errorf("cannot parse the notification schedule: %w", err)
 	}
@@ -281,8 +286,13 @@ func Parse(r io.Reader) (*Meta, error) {
 		return &Meta{}, errors.New("must include a \"scraping\" section")
 	}
 
-	for _, n := range m.Newsletters {
+	if len(m.Newsletters) == 0 {
+		return &Meta{}, errors.New("must include at least one item within \"newsletters\"")
+	}
 
+	// TODO: Move the link sources checking into the unmarshaler for
+	// userconfig.Newsletter
+	for _, n := range m.Newsletters {
 		if len(n.LinkSources) == 0 {
 			return &Meta{}, errors.New("must include at least one item within \"link_sources\"")
 		}

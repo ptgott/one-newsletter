@@ -34,15 +34,19 @@ email:
     toAddress: recipient@example.com
     username: MyUser123
     password: 123456-A_BCDE
-link_sources:
-    - name: site-38911
-      url: http://127.0.0.1:38911
-      itemSelector: "ul li"
-      captionSelector: "p"
-      linkSelector: "a"
 scraping:
     schedule: "M 12"
-    storageDir: ./tempTestDir3012705204`,
+    storageDir: ./tempTestDir3012705204
+newsletters:
+  mynewsletter:
+    schedule: MWF 12
+    link_sources:
+      - name: site-38911
+        url: http://127.0.0.1:38911
+        itemSelector: "ul li"
+        captionSelector: "p"
+        linkSelector: "a"
+`,
 		},
 		{
 			description:   "no email section",
@@ -60,7 +64,7 @@ scraping:
     storageDir: ./tempTestDir3012705204`,
 		},
 		{
-			description:   "no link_sources section",
+			description:   "no newsletters section",
 			shouldBeError: true,
 			shouldBeEmpty: true,
 			conf: `---
@@ -169,6 +173,38 @@ scraping:
 
 }
 
+func TestNewsletterUnmarshalYAML(t *testing.T) {
+	testCases := []struct {
+		description   string
+		input         string
+		shouldBeError bool
+		expected      Newsletter
+	}{
+		// TODO: Add a complete, valid case
+		{
+			description:   "unparseable duration",
+			shouldBeError: true,
+			input:         `interval: 5y`,
+			expected:      Newsletter{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			var s Newsletter
+			if err := yaml.NewDecoder(
+				bytes.NewBuffer([]byte(tc.input)),
+			).Decode(&s); (err != nil) != tc.shouldBeError {
+				t.Errorf(
+					"expected error status to be %v but got error %v",
+					tc.shouldBeError,
+					err,
+				)
+			}
+			assert.Equal(t, tc.expected, s)
+		})
+	}
+}
 func TestScrapingUnmarshalYAML(t *testing.T) {
 	testCases := []struct {
 		description   string
@@ -194,13 +230,6 @@ linkExpiryDays: 100
 			shouldBeError: true,
 			input:         `[]`,
 			expected:      Scraping{},
-		},
-		{
-			description:   "unparseable duration",
-			shouldBeError: true,
-			input: `interval: 5y
-storageDir: ./tempTestDir3012705204`,
-			expected: Scraping{},
 		},
 	}
 
