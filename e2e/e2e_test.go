@@ -104,7 +104,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 
 	ch := make(chan time.Time, 1)
 	store := userconfig.NewScheduleStore()
-	store.Add("myschedule", sched)
+	store.Add("mynewsletter", sched)
 	scrapeConfig := scrape.Config{
 		ScheduleStore: store,
 		TickCh:        ch,
@@ -441,7 +441,7 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 
 	ch := make(chan time.Time, 1)
 	store := userconfig.NewScheduleStore()
-	store.Add("myschedule", sched)
+	store.Add("mynewsletter", sched)
 	scrapeConfig := scrape.Config{
 		ScheduleStore: store,
 		TickCh:        ch,
