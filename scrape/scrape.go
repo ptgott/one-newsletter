@@ -179,7 +179,9 @@ func Run(outwr io.Writer, scraping userconfig.Scraping, emailSettings email.User
 func StartLoop(s *Config, c *userconfig.Meta) error {
 	// TODO: Make the initial newsletter a confirmation that lists
 	// information about all the newsletters we plan to send. Change the Run
-	// call commented out below to reflect this.
+	// call commented out below to reflect this. Once this is done, update
+	// e2e tests so expectedEmails and the fakeTickChan arguments are
+	// correct.
 	//
 	// 	// Run the first scrape immediately
 	// 	err := Run(s.OutputWr, c)

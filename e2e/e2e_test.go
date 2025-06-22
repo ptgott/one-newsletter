@@ -51,7 +51,7 @@ func fakeTickChan(count int) (userconfig.NotificationSchedule, []time.Time) {
 // application as a child process, wait for an interval, then stop the
 // subprocess to count emails sent.
 func TestNewsletterEmailSending(t *testing.T) {
-	expectedEmails := 3
+	expectedEmails := 2
 	epubs := 3
 	linksPerPub := 5
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -64,7 +64,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 	}
 
 	// One email gets sent right away, so make a tick channel for the rest.
-	sched, ticks := fakeTickChan(expectedEmails - 1)
+	sched, ticks := fakeTickChan(expectedEmails)
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
