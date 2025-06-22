@@ -14,7 +14,7 @@ import (
 // starter config. Non-required options are populated automatically using
 // defaults intended for e2e testing.
 func createUserConfig(opts userconfig.Meta) (userconfig.Meta, error) {
-	if opts.LinkSources == nil || opts.EmailSettings.SMTPServerHost == "" || opts.EmailSettings.SMTPServerPort == "" || opts.Scraping.StorageDirPath == "" {
+	if opts.Newsletters == nil || len(opts.Newsletters) == 0 || opts.EmailSettings.SMTPServerHost == "" || opts.EmailSettings.SMTPServerPort == "" || opts.Scraping.StorageDirPath == "" {
 		return userconfig.Meta{}, errors.New("must supply all required fields in appConfigOptions")
 	}
 
@@ -36,30 +36,38 @@ func createUserConfig(opts userconfig.Meta) (userconfig.Meta, error) {
 		},
 	}
 
-	config.LinkSources = make([]linksrc.Config, len(opts.LinkSources))
-	blankURL := url.URL{}
-	for i, ls := range opts.LinkSources {
-		if ls.URL == blankURL || ls.Name == "" {
-			return userconfig.Meta{}, errors.New("each link source must include a URL and Name")
+	newsletters := make(map[string]userconfig.Newsletter)
+
+	for k, n := range opts.Newsletters {
+		sources := make([]linksrc.Config, len(n.LinkSources))
+		blankURL := url.URL{}
+		for i, ls := range n.LinkSources {
+			if ls.URL == blankURL || ls.Name == "" {
+				return userconfig.Meta{}, errors.New("each link source must include a URL and Name")
+			}
+			sources[i] = linksrc.Config{
+				Name:            ls.Name,
+				URL:             ls.URL,
+				MaxItems:        uint(ls.MaxItems),
+				ItemSelector:    cascadia.MustCompile("ul li"),
+				CaptionSelector: cascadia.MustCompile("p"),
+				LinkSelector:    cascadia.MustCompile("a"),
+			}
+			switch {
+			case ls.CaptionSelector != nil:
+				sources[i].CaptionSelector = ls.CaptionSelector
+			case ls.ItemSelector != nil:
+				sources[i].ItemSelector = ls.ItemSelector
+			case ls.LinkSelector != nil:
+				sources[i].LinkSelector = ls.LinkSelector
+			}
 		}
-		config.LinkSources[i] = linksrc.Config{
-			Name:            ls.Name,
-			URL:             ls.URL,
-			MaxItems:        uint(ls.MaxItems),
-			ItemSelector:    cascadia.MustCompile("ul li"),
-			CaptionSelector: cascadia.MustCompile("p"),
-			LinkSelector:    cascadia.MustCompile("a"),
-		}
-		switch {
-		case ls.CaptionSelector != nil:
-			config.LinkSources[i].CaptionSelector = ls.CaptionSelector
-		case ls.ItemSelector != nil:
-			config.LinkSources[i].ItemSelector = ls.ItemSelector
-		case ls.LinkSelector != nil:
-			config.LinkSources[i].LinkSelector = ls.LinkSelector
+		newsletters[k] = userconfig.Newsletter{
+			Schedule:    n.Schedule,
+			LinkSources: sources,
 		}
 	}
+	config.Newsletters = newsletters
 
 	return config, nil
-
 }
