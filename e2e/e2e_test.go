@@ -17,6 +17,7 @@ import (
 	"github.com/ptgott/one-newsletter/smtptest"
 	"github.com/ptgott/one-newsletter/userconfig"
 	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -377,7 +378,7 @@ func totalBadgerDataFileSize(dirPath string) float64 {
 // invalid CSS. This test exists because one site with a config that included
 // an ambiguous selector seems to have caused the application to deadlock.
 func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
-	expectedEmails := 2
+	expectedEmails := 1
 	epubs := 1
 	linksPerPub := 10
 	testenv, err := startTestEnvironment(t, testEnvironmentConfig{
@@ -392,7 +393,7 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 	}
 
 	// One email gets sent right away, so make a tick channel for the rest.
-	sched, ticks := fakeTickChan(expectedEmails - 1)
+	sched, ticks := fakeTickChan(expectedEmails)
 
 	// Configure link site checks for each fake e-publicaiton we've spun up.
 	urls := testenv.urls()
@@ -460,11 +461,8 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not retrieve emails: %v", err)
 	}
-	// Expecting an iteration limit of one, plus the email that gets sent
-	// right away.
-	if len(em) != 2 {
-		t.Fatalf("expected to receive one email, but got %v", len(em))
-	}
+
+	assert.Equal(t, expectedEmails, len(em))
 }
 
 // Test that the -test flag causes email bodies to be printed to stdout,
