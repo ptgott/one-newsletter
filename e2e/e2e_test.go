@@ -122,7 +122,7 @@ func TestNewsletterEmailSending(t *testing.T) {
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 
 	if err != nil {
-		t.Errorf("can't retrieve email from the test SMTP server: %v", err)
+		t.Errorf("can't retrieve email from the test SMTP server: %w", err)
 	}
 
 	// There should be one email per polling interval, plus the initial
@@ -210,7 +210,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	// for emails again.
 	em1, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
-		t.Errorf("could not retrieve emails before the update: %v", err)
+		t.Errorf("could not retrieve emails before the update: %w", err)
 	}
 	if len(em1) == 0 {
 		t.Fatal("retrieved zero emails before the update")
@@ -224,7 +224,7 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 	scrape.StartLoop(&scrapeConfig, &config)
 	em2, err := testenv.SMTPServer.RetrieveEmails(ut)
 	if err != nil {
-		t.Errorf("can't retrieve emails after the update: %v", err)
+		t.Errorf("can't retrieve emails after the update: %w", err)
 	}
 	if len(em2) == 0 {
 		t.Fatal("retrieved zero emails after the update")
@@ -329,7 +329,7 @@ func TestMaxLinkLimits(t *testing.T) {
 	scrape.StartLoop(&scrapeConfig, &config)
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
-		t.Errorf("could not retrieve emails: %v", err)
+		t.Errorf("could not retrieve emails: %w", err)
 	}
 	if len(em) == 0 {
 		t.Fatal("retrieved zero emails")
@@ -458,7 +458,7 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 
 	em, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
-		t.Errorf("could not retrieve emails: %v", err)
+		t.Errorf("could not retrieve emails: %w", err)
 	}
 	// Expecting an iteration limit of one, plus the email that gets sent
 	// right away.
@@ -539,7 +539,7 @@ func TestTestModeFlag(t *testing.T) {
 
 	em1, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
-		t.Errorf("could not retrieve emails: %v", err)
+		t.Errorf("could not retrieve emails: %w", err)
 	}
 	if len(em1) != 0 {
 		t.Fatalf("expected to receive zero emails but got %v", em1)
@@ -641,7 +641,7 @@ func TestOneOffFlag(t *testing.T) {
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 
 	if err != nil {
-		t.Errorf("can't retrieve email from the test SMTP server: %v", err)
+		t.Errorf("can't retrieve email from the test SMTP server: %w", err)
 	}
 
 	// The -oneoff flag should cause only one email to be sent
@@ -726,7 +726,7 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 
 	ems, err := testenv.SMTPServer.RetrieveEmails(0)
 	if err != nil {
-		t.Errorf("could not retrieve emails: %v", err)
+		t.Errorf("could not retrieve emails: %w", err)
 	}
 	if len(ems) != 0 {
 		t.Fatalf("expected to receive zero emails but got %v", ems)

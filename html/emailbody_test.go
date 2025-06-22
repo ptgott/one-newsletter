@@ -73,7 +73,7 @@ func TestGenerateBody(t *testing.T) {
 		_, err = gf.Write([]byte(h))
 
 		if err != nil {
-			t.Errorf("couldn't write to the golden file: %v", err)
+			t.Errorf("couldn't write to the golden file: %w", err)
 		}
 		// Don't check the in-memory HTML against the file we just created
 		return
@@ -82,7 +82,7 @@ func TestGenerateBody(t *testing.T) {
 	f, err := os.Open(relativeGoldenHTMLFilePath)
 
 	if err != nil {
-		t.Errorf("couldn't open the golden file for reading: %v", err)
+		t.Errorf("couldn't open the golden file for reading: %w", err)
 	}
 
 	var content bytes.Buffer
@@ -155,7 +155,7 @@ func TestGenerateText(t *testing.T) {
 		_, err = gf.Write([]byte(h))
 
 		if err != nil {
-			t.Errorf("couldn't write to the golden file: %v", err)
+			t.Errorf("couldn't write to the golden file: %w", err)
 		}
 
 		// Don't check the in-memory text against the file we just created
@@ -166,7 +166,7 @@ func TestGenerateText(t *testing.T) {
 	f, err := os.Open(relativeGoldenTextFilePath)
 
 	if err != nil {
-		t.Errorf("couldn't open the golden file for reading: %v", err)
+		t.Errorf("couldn't open the golden file for reading: %w", err)
 	}
 
 	var content bytes.Buffer

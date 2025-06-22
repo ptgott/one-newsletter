@@ -181,7 +181,7 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	v := make(map[string]string)
 	err := unmarshal(&v)
 	if err != nil {
-		return fmt.Errorf("can't parse the user config: %v", err)
+		return fmt.Errorf("can't parse the user config: %w", err)
 	}
 
 	sp, ok := v["storageDir"]
@@ -205,29 +205,18 @@ func (s *Scraping) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func (r *Newsletter) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	v := make(map[string]interface{})
-	err := unmarshal(&v)
+func (n *NotificationSchedule) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var v string
+	if err := unmarshal(&v); err != nil {
+		return errors.New("notification schedule is not a string")
+	}
+
+	s, err := parseNotificationSchedule(v)
 	if err != nil {
-		return fmt.Errorf("can't parse the newsletter config: %v", err)
+		return fmt.Errorf("invalid notification schedule: %w", err)
 	}
 
-	ni, ok := v["schedule"]
-	if !ok {
-		return errors.New("the configuration must provide a notification schedule")
-	}
-
-	s, ok := ni.(string)
-	if !ok {
-		return errors.New("cannot parse the notification schedule: not a string")
-	}
-
-	n, err := parseNotificationSchedule(s)
-	if err != nil {
-		return fmt.Errorf("cannot parse the notification schedule: %w", err)
-	}
-	r.Schedule = n
-
+	n = &s
 	return nil
 }
 
@@ -273,7 +262,7 @@ func Parse(r io.Reader) (*Meta, error) {
 	var m Meta
 	err := yaml.NewDecoder(r).Decode(&m)
 	if err != nil {
-		return &Meta{}, fmt.Errorf("can't read the config file as YAML: %v", err)
+		return &Meta{}, fmt.Errorf("can't read the config file as YAML: %w", err)
 	}
 
 	var es email.UserConfig = email.UserConfig{}
