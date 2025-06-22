@@ -87,9 +87,13 @@ func TestNewsletterEmailSending(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule:    sched,
+				},
+			},
 			Scraping: userconfig.Scraping{
-				Schedule:       sched,
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -173,12 +177,17 @@ func TestNewsletterEmailUpdates(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
+
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -290,12 +299,17 @@ func TestMaxLinkLimits(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
+
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -407,12 +421,16 @@ func TestEmailSendingWithBadScrapeConfig(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -487,13 +505,17 @@ func TestTestModeFlag(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				TestMode: true, // This is important here
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
+				TestMode:       true, // This is important here
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
@@ -573,12 +595,16 @@ func TestOneOffFlag(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
-			Scraping: userconfig.Scraping{
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
 				},
+			},
+			Scraping: userconfig.Scraping{
 				StorageDirPath: testenv.tempDirPath,
 				OneOff:         true, // This is important here
 			},
@@ -663,15 +689,19 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 				SMTPServerHost: hostport[0],
 				SMTPServerPort: hostport[1],
 			},
-			LinkSources: u,
+			Newsletters: map[string]userconfig.Newsletter{
+				"mynewsletter": userconfig.Newsletter{
+					LinkSources: u,
+					Schedule: userconfig.NotificationSchedule{
+						Weekdays: userconfig.Monday,
+						Hour:     12,
+					},
+				},
+			},
 			Scraping: userconfig.Scraping{
 				// Note that both TestMode and OneOff are true here.
-				TestMode: true,
-				OneOff:   true,
-				Schedule: userconfig.NotificationSchedule{
-					Weekdays: userconfig.Monday,
-					Hour:     12,
-				},
+				TestMode:       true,
+				OneOff:         true,
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},
