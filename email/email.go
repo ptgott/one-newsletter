@@ -142,7 +142,6 @@ func (uc *UserConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // `text/html` type in asHTML. A lack of an error means the message was
 // received by the destination SMTP server.
 func (uc UserConfig) SendNewsletter(asText, asHTML []byte) error {
-
 	auth := smtp.PlainAuth("", uc.UserName, uc.Password, uc.SMTPServerHost)
 
 	// Write the email body. It will have the following MIME entities.

@@ -611,6 +611,7 @@ func TestOneOffFlag(t *testing.T) {
 			Scraping: userconfig.Scraping{
 				StorageDirPath: testenv.tempDirPath,
 				OneOff:         true, // This is important here
+				NewsletterName: "mynewsletter",
 			},
 		},
 	)
