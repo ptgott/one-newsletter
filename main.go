@@ -46,6 +46,11 @@ func main() {
 		false,
 		"Run the scrapers and send a single email. Used for testing a live One Newsletter deployment. Does not touch the database.",
 	)
+	name := flag.String(
+		"name",
+		"",
+		"Name of the newsletter to run in test or one-off mode. Must be present in the configuration file.",
+	)
 	level := flag.String(
 		"level",
 		"",
@@ -96,6 +101,7 @@ func main() {
 	}
 	config.Scraping.OneOff = *oneOff
 	config.Scraping.TestMode = *testMode
+	config.Scraping.NewsletterName = *name
 
 	checkedConfig, err := config.CheckAndSetDefaults()
 	if err != nil {

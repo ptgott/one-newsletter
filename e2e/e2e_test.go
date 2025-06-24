@@ -514,6 +514,7 @@ func TestTestModeFlag(t *testing.T) {
 			Scraping: userconfig.Scraping{
 				TestMode:       true, // This is important here
 				StorageDirPath: testenv.tempDirPath,
+				NewsletterName: "mynewsletter",
 			},
 		},
 	)
@@ -705,6 +706,7 @@ func TestOneOffFlagWithNoEmailFlag(t *testing.T) {
 				// Note that both TestMode and OneOff are true here.
 				TestMode:       true,
 				OneOff:         true,
+				NewsletterName: "mynewsletter",
 				StorageDirPath: testenv.tempDirPath,
 			},
 		},

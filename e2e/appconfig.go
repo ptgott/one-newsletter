@@ -29,6 +29,7 @@ func createUserConfig(opts userconfig.Meta) (userconfig.Meta, error) {
 			SkipCertVerification: true,
 		},
 		Scraping: userconfig.Scraping{
+			NewsletterName: opts.Scraping.NewsletterName,
 			StorageDirPath: opts.Scraping.StorageDirPath,
 			OneOff:         opts.Scraping.OneOff,
 			TestMode:       opts.Scraping.TestMode,

@@ -145,13 +145,16 @@ func (s *ScheduleStore) Get(t time.Time) []string {
 // behavior
 type Scraping struct {
 	StorageDirPath string
-	// Run the scraper once, then exit
-	OneOff bool
-	// Print the HTML body of a single email to stdout and exit to help test
+	// OneOff runs the scraper once, then exits
+	OneOff bool `yaml:"one_off"`
+	// TestMode prints the HTML body of a single email to stdout and exit to help test
 	// configuration.
-	TestMode bool
-	// Number of days we keep a link in the database before marking it
-	// expired.
+	TestMode bool `yaml:"test_mode"`
+	// NewsletterName indicates the name of the newsletter to send in
+	// one-off or test mode.
+	NewsletterName string `yaml:"newsletter_name"`
+	// LinkExpiryDay is the number of days we keep a link in the database
+	// before marking it expired.
 	LinkExpiryDays uint
 }
 

@@ -177,6 +177,20 @@ func Run(outwr io.Writer, scraping userconfig.Scraping, emailSettings email.User
 // interval as specified in the provided config. If an s.ErrCh is provided,
 // sends any errors to it. Send a struct{} to sc to stop the scraper.
 func StartLoop(s *Config, c *userconfig.Meta) error {
+	// Only running the loop once for the specified newsletter
+	if c.Scraping.OneOff || c.Scraping.TestMode {
+		n, ok := c.Newsletters[c.Scraping.NewsletterName]
+		if !ok {
+			return fmt.Errorf("cannot find a configuration for a newsletter named %q", c.Scraping.NewsletterName)
+		}
+		err := Run(s.OutputWr, c.Scraping, c.EmailSettings, n)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	// TODO: Make the initial newsletter a confirmation that lists
 	// information about all the newsletters we plan to send. Change the Run
 	// call commented out below to reflect this. Once this is done, update
@@ -188,18 +202,6 @@ func StartLoop(s *Config, c *userconfig.Meta) error {
 	// 	if err != nil {
 	// 		return err
 	// 	}
-
-	// Only running the loop once
-	if c.Scraping.OneOff || c.Scraping.TestMode {
-		// TODO: Require a --name flag for OneOff or TestMode. Use this to
-		// look up a newsletter and send it.
-		// 		err := Run(s.OutputWr, c)
-		// 		if err != nil {
-		// 			return err
-		// 		}
-
-		return nil
-	}
 
 	for {
 		tk, ok := <-s.TickCh
