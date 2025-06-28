@@ -56,7 +56,7 @@ func Run(outwr io.Writer, scraping userconfig.Scraping, emailSettings email.User
 	log.Info().
 		Msg("launching scrapers")
 	var wg sync.WaitGroup
-	d := html.NewEmailData()
+	d := html.NewNewsletterEmailData()
 
 	// buffer the results of the latest scrape so we can perform a diff
 	// with the previous scrape and build an email body

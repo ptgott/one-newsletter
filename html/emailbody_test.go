@@ -20,7 +20,7 @@ const (
 // delete the file at $relativeGoldenHTMLFilePath before running this test. Edits
 // to the golden file should be checked into version control.
 func TestGenerateBody(t *testing.T) {
-	ed := EmailData{
+	ed := NewsletterEmailData{
 		mtx: &sync.Mutex{},
 		content: []BodySectionContent{
 			{
@@ -102,7 +102,7 @@ func TestGenerateBody(t *testing.T) {
 // delete the file at $relativeGoldenTextFilePath before running this test. Edits
 // to the golden file should be checked into version control.
 func TestGenerateText(t *testing.T) {
-	ed := EmailData{
+	ed := NewsletterEmailData{
 		mtx: &sync.Mutex{},
 		content: []BodySectionContent{
 			{

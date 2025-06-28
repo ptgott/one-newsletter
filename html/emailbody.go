@@ -71,18 +71,18 @@ const emailBodyText = `{{ range . }}
 {{ end }}
 `
 
-// EmailData contains metadata for the body of an email to send
+// NewsletterEmailData contains metadata for the body of an email to send
 // with a newsletter etc. Since each linksrc.Set in linksets
 // comes from a different upstream, this is designed to support
 // concurrent access. You should create this with NewEmailData.
-type EmailData struct {
+type NewsletterEmailData struct {
 	content []BodySectionContent
 	mtx     *sync.Mutex
 }
 
-// NewEmailData safely creates an EmailData.
-func NewEmailData() *EmailData {
-	return &EmailData{
+// NewNewsletterEmailData safely creates an EmailData.
+func NewNewsletterEmailData() *NewsletterEmailData {
+	return &NewsletterEmailData{
 		content: []BodySectionContent{},
 		mtx:     &sync.Mutex{},
 	}
@@ -91,7 +91,7 @@ func NewEmailData() *EmailData {
 // Add stores a new linksrc.Set in the EmailData in a
 // goroutine-safe way. Callers must use Add for adding
 // linksrc.Sets to the EmailData.
-func (ed *EmailData) Add(s linksrc.Set) {
+func (ed *NewsletterEmailData) Add(s linksrc.Set) {
 	ed.mtx.Lock()
 	defer ed.mtx.Unlock()
 
@@ -100,7 +100,7 @@ func (ed *EmailData) Add(s linksrc.Set) {
 
 // populateEmailTemplate executes a package-local template with the provided
 // EmailData and performs any last-minute checks needed to do this.
-func populateEmailTemplate(ed *EmailData, tmp string) string {
+func populateEmailTemplate(ed *NewsletterEmailData, tmp string) string {
 	ed.mtx.Lock()
 	defer ed.mtx.Unlock()
 
@@ -116,7 +116,7 @@ func populateEmailTemplate(ed *EmailData, tmp string) string {
 // content. It's meant to include multiple sources of links in the same
 // email to reduce the number of emails we send. Any scraping- or parsing-
 // related error messages are included in the text.
-func (ed *EmailData) GenerateBody() string {
+func (ed *NewsletterEmailData) GenerateBody() string {
 	return populateEmailTemplate(ed, emailBodyHTML)
 }
 
@@ -124,6 +124,6 @@ func (ed *EmailData) GenerateBody() string {
 // content, satisfying the text/plain MIME type. It's meant to include multiple
 // sources of links in the same email to reduce the number of emails we send.
 // Any scraping- or parsing- related error messages are included in the text.
-func (ed *EmailData) GenerateText() string {
+func (ed *NewsletterEmailData) GenerateText() string {
 	return populateEmailTemplate(ed, emailBodyText)
 }
