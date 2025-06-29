@@ -33,7 +33,7 @@ func testGoldenFile(t *testing.T, path string, expected string) {
 		gf, _ := os.Create(path)
 		defer gf.Close()
 
-		_, err = gf.Write([]byte(content))
+		_, err = gf.Write([]byte(expected))
 		require.NoError(t, err)
 
 		// Don't check the in-memory HTML against the file we just created

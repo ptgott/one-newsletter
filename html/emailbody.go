@@ -2,12 +2,10 @@ package html
 
 import (
 	"html/template"
-	"net/url"
 	"strings"
 	"sync"
 
 	"github.com/ptgott/one-newsletter/linksrc"
-	"github.com/ptgott/one-newsletter/userconfig"
 )
 
 // BodySectionContent is used to populate email body templates
@@ -134,8 +132,8 @@ func (ed *NewsletterEmailData) GenerateText() string {
 // summarize all configured newsletters in an initial email.
 type SummaryContent struct {
 	Name     string
-	URL      url.URL
-	Schedule userconfig.NotificationSchedule
+	URL      string
+	Schedule string
 }
 
 // SummaryEmailData contains information for summarizing all configured
@@ -143,4 +141,33 @@ type SummaryContent struct {
 type SummaryEmailData struct {
 	content []SummaryContent
 	mtx     *sync.Mutex
+}
+
+// populateSummaryEmailTemplate executes a package-local template with the
+// provided SummaryEmailData and performs any last-minute checks needed to do this.
+func populateSummaryEmailTemplate(ed *SummaryEmailData, tmp string) string {
+	ed.mtx.Lock()
+	defer ed.mtx.Unlock()
+
+	var str strings.Builder
+	// The template text is constant, so suppressing the error
+	tmpl, _ := template.New("body").Parse(tmp)
+	tmpl.Execute(&str, ed.content)
+
+	return str.String()
+}
+
+// summaryEmailBodyText is a template meant to be populated with a
+// []SummaryContent.  Meant to satisfy the text/plain MIME type.
+const summaryEmailBodyText = `You have configured the following newsletters:
+{{ range . -}}
+- {{.Name}} ({{.URL}}): {{.Schedule}}
+{{ end }}
+`
+
+// GenerateText produces an email body to send based on the unformatted
+// content, satisfying the text/plain MIME type. It's meant to include a summary
+// of configured newsletters to include in an initial email.
+func (ed *SummaryEmailData) GenerateText() string {
+	return populateSummaryEmailTemplate(ed, summaryEmailBodyText)
 }
