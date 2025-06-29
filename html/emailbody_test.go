@@ -9,17 +9,14 @@ import (
 	"github.com/ptgott/one-newsletter/linksrc"
 )
 
+// Paths for golden file tests. To update a golden file, delete it and run the
+// test again.
 const (
 	relativeGoldenHTMLFilePath string = "golden-email-body.html"
 	relativeGoldenTextFilePath string = "golden-email-body.txt"
 )
 
-// GenerateBody straightforwardly populates a template and takes no input. As
-// a result, there's not much that can go wrong. Still, we want to catch
-// regressions, so we'll use a golden file here. To update the golden file,
-// delete the file at $relativeGoldenHTMLFilePath before running this test. Edits
-// to the golden file should be checked into version control.
-func TestGenerateBody(t *testing.T) {
+func TestNewsletterEmailData_GenerateBody(t *testing.T) {
 	ed := NewsletterEmailData{
 		mtx: &sync.Mutex{},
 		content: []BodySectionContent{
@@ -96,12 +93,7 @@ func TestGenerateBody(t *testing.T) {
 
 }
 
-// GenerateText straightforwardly populates a template and takes no input. As
-// a result, there's not much that can go wrong. Still, we want to catch
-// regressions, so we'll use a golden file here. To update the golden file,
-// delete the file at $relativeGoldenTextFilePath before running this test. Edits
-// to the golden file should be checked into version control.
-func TestGenerateText(t *testing.T) {
+func TestNewsletterEmailData_GenerateText(t *testing.T) {
 	ed := NewsletterEmailData{
 		mtx: &sync.Mutex{},
 		content: []BodySectionContent{

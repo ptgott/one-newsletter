@@ -40,7 +40,6 @@ type UserConfig struct {
 // CheckAndSetDefaults validates s and either returns a copy of c with default
 // settings applied or returns an error due to an invalid configuration
 func (c *UserConfig) CheckAndSetDefaults() (UserConfig, error) {
-
 	uc := *c
 
 	if c.SkipCertVerification == true {
