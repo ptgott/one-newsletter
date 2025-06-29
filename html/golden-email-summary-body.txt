@@ -1,0 +1,5 @@
+You have configured the following newsletters:
+- News (https://example.com/news): Mondays and Thursdays at 13:00
+- Jokes (https://example.com/jokes): Wednesdays at 16:00
+- Events (https://example.com/events): Fridays at 12:00
+
