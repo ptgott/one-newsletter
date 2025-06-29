@@ -37,9 +37,6 @@ func NewBodySectionContent(s linksrc.Set) BodySectionContent {
 }
 
 // Template meant to be populated with a []linksrc.Set
-// Using tables for layout to avoid cross-client irregularities.
-// See here for best practices:
-// https://www.smashingmagazine.com/2017/01/introduction-building-sending-html-email-for-web-developers/#using-html-tables-for-layout
 const emailBodyHTML = `<html>
 <head>
 </head>
@@ -165,9 +162,30 @@ const summaryEmailBodyText = `You have configured the following newsletters:
 {{ end }}
 `
 
+// Template meant to be populated with a []SummaryContent.
+// Using tables for layout to avoid cross-client irregularities.
+const summaryEmailBodyHTML = `<html>
+<head>
+</head>
+<body>
+	<p>You have configured the following newsletters:</p>
+	<ul>
+	{{ range . }}
+	    <li>{{.Name}} ({{.URL}}): {{.Schedule}}</li>
+	{{ end }}
+	</ul>
+</body>
+</html>`
+
 // GenerateText produces an email body to send based on the unformatted
 // content, satisfying the text/plain MIME type. It's meant to include a summary
 // of configured newsletters to include in an initial email.
 func (ed *SummaryEmailData) GenerateText() string {
 	return populateSummaryEmailTemplate(ed, summaryEmailBodyText)
+}
+
+// GenerateBody produces an HTML email body to send based on the unformatted
+// content.
+func (ed *SummaryEmailData) GenerateBody() string {
+	return populateSummaryEmailTemplate(ed, summaryEmailBodyHTML)
 }

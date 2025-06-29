@@ -17,6 +17,7 @@ const (
 	relativeGoldenHTMLFilePath        string = "golden-email-body.html"
 	relativeGoldenTextFilePath        string = "golden-email-body.txt"
 	relativeGoldenTextSummaryFilePath string = "golden-email-summary-body.txt"
+	relativeGoldenHTMLSummaryFilePath string = "golden-email-summary-body.html"
 )
 
 // testGoldenFile opens the file at path or, if it doesn't exist, creates it
@@ -160,4 +161,30 @@ func TestSummaryEmailData_GenerateText(t *testing.T) {
 
 	h := sd.GenerateText()
 	testGoldenFile(t, relativeGoldenTextSummaryFilePath, h)
+}
+
+func TestSummaryEmailData_GenerateBody(t *testing.T) {
+	sd := SummaryEmailData{
+		mtx: &sync.Mutex{},
+		content: []SummaryContent{
+			{
+				Name:     "News",
+				URL:      "https://example.com/news",
+				Schedule: "Mondays and Thursdays at 13:00",
+			},
+			{
+				Name:     "Jokes",
+				URL:      "https://example.com/jokes",
+				Schedule: "Wednesdays at 16:00",
+			},
+			{
+				Name:     "Events",
+				URL:      "https://example.com/events",
+				Schedule: "Fridays at 12:00",
+			},
+		},
+	}
+
+	h := sd.GenerateBody()
+	testGoldenFile(t, relativeGoldenHTMLSummaryFilePath, h)
 }
