@@ -2,10 +2,12 @@ package html
 
 import (
 	"html/template"
+	"net/url"
 	"strings"
 	"sync"
 
 	"github.com/ptgott/one-newsletter/linksrc"
+	"github.com/ptgott/one-newsletter/userconfig"
 )
 
 // BodySectionContent is used to populate email body templates
@@ -126,4 +128,19 @@ func (ed *NewsletterEmailData) GenerateBody() string {
 // Any scraping- or parsing- related error messages are included in the text.
 func (ed *NewsletterEmailData) GenerateText() string {
 	return populateEmailTemplate(ed, emailBodyText)
+}
+
+// SummaryContent includes configuration details for a newsletter. Used to
+// summarize all configured newsletters in an initial email.
+type SummaryContent struct {
+	Name     string
+	URL      url.URL
+	Schedule userconfig.NotificationSchedule
+}
+
+// SummaryEmailData contains information for summarizing all configured
+// newsletters in an initial email.
+type SummaryEmailData struct {
+	content []SummaryContent
+	mtx     *sync.Mutex
 }
