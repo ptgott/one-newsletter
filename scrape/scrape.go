@@ -193,7 +193,7 @@ func StartLoop(s *Config, c *userconfig.Meta) error {
 
 	// Send a confirmation email that summarizes the configured newsletters.
 	summary := html.NewSummaryEmailData(c)
-	if err := c.EmailSettings.SendNewsletter(summary.GenerateText(), summary.GenerateBody()); err != nil {
+	if err := c.EmailSettings.SendNewsletter([]byte(summary.GenerateText()), []byte(summary.GenerateBody())); err != nil {
 		return err
 	}
 

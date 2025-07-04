@@ -174,7 +174,7 @@ func populateSummaryEmailTemplate(ed *SummaryEmailData, tmp string) string {
 // []SummaryContent.  Meant to satisfy the text/plain MIME type.
 const summaryEmailBodyText = `You have configured the following newsletters:
 {{ range . -}}
-- {{.Name}} ({{.URL}}): {{.Schedule}}
+- {{.Name}}: {{.Schedule}}
 {{ end }}
 `
 
@@ -187,7 +187,7 @@ const summaryEmailBodyHTML = `<html>
 	<p>You have configured the following newsletters:</p>
 	<ul>
 	{{ range . }}
-	    <li>{{.Name}} ({{.URL}}): {{.Schedule}}</li>
+	    <li>{{.Name}}: {{.Schedule}}</li>
 	{{ end }}
 	</ul>
 </body>
