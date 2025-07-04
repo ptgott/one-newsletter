@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/ptgott/one-newsletter/linksrc"
+	"github.com/ptgott/one-newsletter/userconfig"
 )
 
 // BodySectionContent is used to populate email body templates
@@ -129,7 +130,6 @@ func (ed *NewsletterEmailData) GenerateText() string {
 // summarize all configured newsletters in an initial email.
 type SummaryContent struct {
 	Name     string
-	URL      string
 	Schedule string
 }
 
@@ -138,6 +138,18 @@ type SummaryContent struct {
 type SummaryEmailData struct {
 	content []SummaryContent
 	mtx     *sync.Mutex
+}
+
+func NewSummaryEmailData(m userconfig.Meta) SummaryEmailData {
+	content := make([]SummaryContent, len(m.Newsletters))
+	var i int
+	for k, n := range m.Newsletters {
+		content[i] = SummaryContent{
+			Name:     k,
+			Schedule: formatSchedule(n.Schedule),
+		}
+		i++
+	}
 }
 
 // populateSummaryEmailTemplate executes a package-local template with the

@@ -143,17 +143,14 @@ func TestSummaryEmailData_GenerateText(t *testing.T) {
 		content: []SummaryContent{
 			{
 				Name:     "News",
-				URL:      "https://example.com/news",
-				Schedule: "Mondays and Thursdays at 13:00",
+				Schedule: "Mondays, Thursdays at 13:00",
 			},
 			{
 				Name:     "Jokes",
-				URL:      "https://example.com/jokes",
 				Schedule: "Wednesdays at 16:00",
 			},
 			{
 				Name:     "Events",
-				URL:      "https://example.com/events",
 				Schedule: "Fridays at 12:00",
 			},
 		},
@@ -169,17 +166,14 @@ func TestSummaryEmailData_GenerateBody(t *testing.T) {
 		content: []SummaryContent{
 			{
 				Name:     "News",
-				URL:      "https://example.com/news",
-				Schedule: "Mondays and Thursdays at 13:00",
+				Schedule: "Mondays, Thursdays at 13:00",
 			},
 			{
 				Name:     "Jokes",
-				URL:      "https://example.com/jokes",
 				Schedule: "Wednesdays at 16:00",
 			},
 			{
 				Name:     "Events",
-				URL:      "https://example.com/events",
 				Schedule: "Fridays at 12:00",
 			},
 		},

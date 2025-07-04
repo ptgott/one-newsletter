@@ -564,3 +564,26 @@ func Test_parseNotificationSchedule_invalid(t *testing.T) {
 		})
 	}
 }
+
+func TestNotificationScheduleString(t *testing.T) {
+	cases := []struct {
+		description string
+		input       NotificationSchedule
+		expected    string
+	}{
+		{
+			description: "single weekday",
+			input: NotificationSchedule{
+				Weekdays: Friday,
+				Hour:     12,
+			},
+			expected: "Fridays at 12:00",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			assert.Equal(t, c.expected, c.input.String())
+		})
+	}
+}

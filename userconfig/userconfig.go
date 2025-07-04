@@ -51,6 +51,16 @@ var allDays [7]Weekdays = [7]Weekdays{
 	Sunday,
 }
 
+var daysToString map[Weekdays]string = map[Weekdays]string{
+	Monday:    "Mondays",
+	Tuesday:   "Tuesdays",
+	Wednesday: "Wednesdays",
+	Thursday:  "Thursdays",
+	Friday:    "Fridays",
+	Saturday:  "Saturdays",
+	Sunday:    "Sundays",
+}
+
 var daysToTime map[Weekdays]time.Weekday = map[Weekdays]time.Weekday{
 	Monday:    time.Monday,
 	Tuesday:   time.Tuesday,
@@ -66,6 +76,20 @@ const DefaultScheduleName = "newsletter"
 type NotificationSchedule struct {
 	Weekdays Weekdays
 	Hour     int
+}
+
+func (n NotificationSchedule) String() string {
+	var s strings.Builder
+	var days []string
+	for _, d := range allDays {
+		if n.Weekdays&d == 0 {
+			continue
+		}
+		days = append(days, daysToString[d])
+		s.WriteString(strings.Join(days, ", "))
+	}
+	s.WriteString(" at " + strconv.Itoa(n.Hour) + ":00")
+	return s.String()
 }
 
 // Moment specifies attributes of a time as returned by methods of
