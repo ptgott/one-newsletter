@@ -136,7 +136,7 @@ type SummaryContent struct {
 // SummaryEmailData contains information for summarizing all configured
 // newsletters in an initial email.
 type SummaryEmailData struct {
-	content []SummaryContent
+	Content []SummaryContent
 	mtx     *sync.Mutex
 }
 
@@ -146,9 +146,13 @@ func NewSummaryEmailData(m userconfig.Meta) SummaryEmailData {
 	for k, n := range m.Newsletters {
 		content[i] = SummaryContent{
 			Name:     k,
-			Schedule: formatSchedule(n.Schedule),
+			Schedule: n.Schedule.String(),
 		}
 		i++
+	}
+	return SummaryEmailData{
+		Content: content,
+		mtx:     &sync.Mutex{},
 	}
 }
 
@@ -161,7 +165,7 @@ func populateSummaryEmailTemplate(ed *SummaryEmailData, tmp string) string {
 	var str strings.Builder
 	// The template text is constant, so suppressing the error
 	tmpl, _ := template.New("body").Parse(tmp)
-	tmpl.Execute(&str, ed.content)
+	tmpl.Execute(&str, ed.Content)
 
 	return str.String()
 }

@@ -140,7 +140,7 @@ func TestNewsletterEmailData_GenerateText(t *testing.T) {
 func TestSummaryEmailData_GenerateText(t *testing.T) {
 	sd := SummaryEmailData{
 		mtx: &sync.Mutex{},
-		content: []SummaryContent{
+		Content: []SummaryContent{
 			{
 				Name:     "News",
 				Schedule: "Mondays, Thursdays at 13:00",
@@ -163,7 +163,7 @@ func TestSummaryEmailData_GenerateText(t *testing.T) {
 func TestSummaryEmailData_GenerateBody(t *testing.T) {
 	sd := SummaryEmailData{
 		mtx: &sync.Mutex{},
-		content: []SummaryContent{
+		Content: []SummaryContent{
 			{
 				Name:     "News",
 				Schedule: "Mondays, Thursdays at 13:00",
