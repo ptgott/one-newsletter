@@ -191,17 +191,11 @@ func StartLoop(s *Config, c *userconfig.Meta) error {
 		return nil
 	}
 
-	// TODO: Make the initial newsletter a confirmation that lists
-	// information about all the newsletters we plan to send. Change the Run
-	// call commented out below to reflect this. Once this is done, update
-	// e2e tests so expectedEmails and the fakeTickChan arguments are
-	// correct.
-	//
-	// 	// Run the first scrape immediately
-	// 	err := Run(s.OutputWr, c)
-	// 	if err != nil {
-	// 		return err
-	// 	}
+	// Send a confirmation email that summarizes the configured newsletters.
+	summary := html.NewSummaryEmailData(c)
+	if err := c.EmailSettings.SendNewsletter(summary.GenerateText(), summary.GenerateBody()); err != nil {
+		return err
+	}
 
 	for {
 		tk, ok := <-s.TickCh

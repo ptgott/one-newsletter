@@ -140,7 +140,7 @@ type SummaryEmailData struct {
 	mtx     *sync.Mutex
 }
 
-func NewSummaryEmailData(m userconfig.Meta) SummaryEmailData {
+func NewSummaryEmailData(m *userconfig.Meta) SummaryEmailData {
 	content := make([]SummaryContent, len(m.Newsletters))
 	var i int
 	for k, n := range m.Newsletters {
