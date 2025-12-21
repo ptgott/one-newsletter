@@ -34,16 +34,18 @@ Run the following command:
 onenewsletter -config path/to/config.yaml
 ```
 
-### Link sources and link items
+## Link sources and link items
 
 One Newsletter works by scraping **link sources**, web pages with lists of links
 to other web pages. These lists of links are called **link items**, and each one
 is assumed to have both a link URL and a caption that describes the URL.
 
-### Configuration
+## Configuration
 
 One Newsletter reads its configuration from the YAML file at the `-config` path.
-The file has the following structure.
+This section explains the top-level fields of the configuration file.
+
+### `email`
 
 `email` configures the SMTP relay. The relay must advertise STARTTLS and AUTH.
 One Newsletter negotiates a TLS connection and uses your username and pasword to
@@ -57,6 +59,8 @@ email:
   username: MyUser123
   password: 123456-A_BCDE
 ```
+
+### `scraping`
 
 `scraping` configures the scraper.
 
@@ -83,11 +87,62 @@ scraping:
   linkExpiryDays: 100
 ```
 
-The `link_sources` section tells One Newsletter how to scrape websites for
-links. One Newsletter tracks these as **link sources**. Each link source
-includes a menu of links (e.g., a "Most Read" list), and One Newsletter scrapes
-these menus for updates by examining the structure of its **link items**, i.e.,
-a link and its surrounding HTML.
+### `newsletters`
+
+You can configure One Newsletter to include content from specific sites on
+particular days of the week. To configure the sites to include in each
+email, and when those emails arrive in your inbox, use the `newsletters`
+section.
+
+`newsletters` is a map of strings to objects. The key of each item represents
+the name of the newsletter. Each object specifies the newsletter's link sources
+and notification schedule:
+
+```yaml
+newsletters:
+  newsletter1:
+    schedule: MWF 12
+    link_sources:
+      - name: mysite
+        url: https://example.com/rss
+  newsletter2:
+    schedule: Th 14
+    link_sources:
+      - name: mysite
+        url: https://example.com/rss
+
+```
+
+#### Notification schedules
+
+For each newsletter, you can configure the days of the week and time of day that
+One Newsletter sends an email. The syntax is:
+
+```
+<days of the week> <time of day>
+```
+
+The following days of the week are available:
+
+|String|Day|
+|---|---|
+|`M`|Monday|
+|`Tu`|Tuesday|
+|`W`|Wednesday|
+|`Th`|Thursday|
+|`F`|Friday|
+|`Sa`|Saturday|
+|`Su`|Sunday|
+
+The time of day is a single hour between 1 and 24.
+
+#### `link_sources`
+
+In each newsletter configuration, the `link_sources` section tells One
+Newsletter how to scrape websites for links. One Newsletter tracks these as
+**link sources**. Each link source includes a menu of links (e.g., a "Most Read"
+list), and One Newsletter scrapes these menus for updates by examining the
+structure of its **link items**, i.e., a link and its surrounding HTML.
 
 You can instruct One Newsletter to scrape links at three levels of specificity,
 depending on how much you can tolerate unexpected results and you want to dig
@@ -173,7 +228,7 @@ link_sources:
     minElementWords: 5
 ```
 
-### Optional flags
+## Optional flags
 
 By default, One Newsletter will periodically scrape the websites of your choice,
 check the results against past results, and send an email containing the new
@@ -193,7 +248,7 @@ links. You can alter this behavior with the following flags:
   `warn`. `info` by default. If you are using the `-test` flag, logging is
   disabled unless you specify a level.
 
-### How automatic link item detection works
+## How automatic link item detection works
 
 Automatic link item detection works from the assumption that each link sits in a
 chunk of automatically generated HTML, e.g., the result of server-side template

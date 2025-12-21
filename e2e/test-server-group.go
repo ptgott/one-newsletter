@@ -131,7 +131,7 @@ func startTestServerGroup(numServers int, numLinks int) *testServerGroup {
 	for i := range servs {
 		servs[i] = fakeEPublication{
 			numLinks: numLinks,
-			id:       uuid.NewString(),
+			id:       fmt.Sprintf("fakepub-%v", i),
 			updates:  make(map[int64][]mockArticleListing),
 		}
 		// the first update

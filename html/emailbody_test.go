@@ -7,20 +7,52 @@ import (
 	"testing"
 
 	"github.com/ptgott/one-newsletter/linksrc"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
+// Paths for golden file tests. To update a golden file, delete it and run the
+// test again.
 const (
-	relativeGoldenHTMLFilePath string = "golden-email-body.html"
-	relativeGoldenTextFilePath string = "golden-email-body.txt"
+	relativeGoldenHTMLFilePath        string = "golden-email-body.html"
+	relativeGoldenTextFilePath        string = "golden-email-body.txt"
+	relativeGoldenTextSummaryFilePath string = "golden-email-summary-body.txt"
+	relativeGoldenHTMLSummaryFilePath string = "golden-email-summary-body.html"
 )
 
-// GenerateBody straightforwardly populates a template and takes no input. As
-// a result, there's not much that can go wrong. Still, we want to catch
-// regressions, so we'll use a golden file here. To update the golden file,
-// delete the file at $relativeGoldenHTMLFilePath before running this test. Edits
-// to the golden file should be checked into version control.
-func TestGenerateBody(t *testing.T) {
-	ed := EmailData{
+// testGoldenFile opens the file at path or, if it doesn't exist, creates it
+// with expected. If the file exists, checks expected against the content of the
+// file.
+func testGoldenFile(t *testing.T, path string, expected string) {
+	_, err := os.Stat(path)
+
+	// This will always be an *os.PathError
+	// https://golang.org/pkg/os/#Stat
+	if err != nil {
+		// not handling the error since it will only be a path error in
+		// os.openFileNoLog, which os.Create wraps via os.OpenFile.
+		gf, _ := os.Create(path)
+		defer gf.Close()
+
+		_, err = gf.Write([]byte(expected))
+		require.NoError(t, err)
+
+		// Don't check the in-memory HTML against the file we just created
+		return
+	}
+
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	defer f.Close()
+
+	var content bytes.Buffer
+	_, err = content.ReadFrom(f)
+	require.NoError(t, err)
+	assert.Equal(t, expected, content.String())
+}
+
+func TestNewsletterEmailData_GenerateBody(t *testing.T) {
+	ed := NewsletterEmailData{
 		mtx: &sync.Mutex{},
 		content: []BodySectionContent{
 			{
@@ -59,50 +91,11 @@ func TestGenerateBody(t *testing.T) {
 	}
 
 	h := ed.GenerateBody()
-
-	_, err := os.Stat(relativeGoldenHTMLFilePath)
-
-	// This will always be an *os.PathError
-	// https://golang.org/pkg/os/#Stat
-	if err != nil {
-		// not handling the error since it will only be a path error in
-		// os.openFileNoLog, which os.Create wraps via os.OpenFile.
-		gf, _ := os.Create(relativeGoldenHTMLFilePath)
-		defer gf.Close()
-
-		_, err = gf.Write([]byte(h))
-
-		if err != nil {
-			t.Errorf("couldn't write to the golden file: %v", err)
-		}
-		// Don't check the in-memory HTML against the file we just created
-		return
-	}
-
-	f, err := os.Open(relativeGoldenHTMLFilePath)
-
-	if err != nil {
-		t.Errorf("couldn't open the golden file for reading: %v", err)
-	}
-
-	var content bytes.Buffer
-	_, err = content.ReadFrom(f)
-	if err != nil {
-		t.Errorf("couldn't read from the golden file %v", relativeGoldenHTMLFilePath)
-	}
-	if string(content.Bytes()) != h {
-		t.Errorf("the HTML generated from GenerateBody does not match the golden file at %v", relativeGoldenHTMLFilePath)
-	}
-
+	testGoldenFile(t, relativeGoldenHTMLFilePath, h)
 }
 
-// GenerateText straightforwardly populates a template and takes no input. As
-// a result, there's not much that can go wrong. Still, we want to catch
-// regressions, so we'll use a golden file here. To update the golden file,
-// delete the file at $relativeGoldenTextFilePath before running this test. Edits
-// to the golden file should be checked into version control.
-func TestGenerateText(t *testing.T) {
-	ed := EmailData{
+func TestNewsletterEmailData_GenerateText(t *testing.T) {
+	ed := NewsletterEmailData{
 		mtx: &sync.Mutex{},
 		content: []BodySectionContent{
 			{
@@ -141,40 +134,51 @@ func TestGenerateText(t *testing.T) {
 	}
 
 	h := ed.GenerateText()
+	testGoldenFile(t, relativeGoldenTextFilePath, h)
+}
 
-	_, err := os.Stat(relativeGoldenTextFilePath)
-
-	// This will always be an *os.PathError
-	// https://golang.org/pkg/os/#Stat
-	if err != nil {
-		// not handling the error since it will only be a path error in
-		// os.openFileNoLog, which os.Create wraps via os.OpenFile.
-		gf, _ := os.Create(relativeGoldenTextFilePath)
-		defer gf.Close()
-
-		_, err = gf.Write([]byte(h))
-
-		if err != nil {
-			t.Errorf("couldn't write to the golden file: %v", err)
-		}
-
-		// Don't check the in-memory text against the file we just created
-		return
-
+func TestSummaryEmailData_GenerateText(t *testing.T) {
+	sd := SummaryEmailData{
+		mtx: &sync.Mutex{},
+		Content: []SummaryContent{
+			{
+				Name:     "News",
+				Schedule: "Mondays, Thursdays at 13:00",
+			},
+			{
+				Name:     "Jokes",
+				Schedule: "Wednesdays at 16:00",
+			},
+			{
+				Name:     "Events",
+				Schedule: "Fridays at 12:00",
+			},
+		},
 	}
 
-	f, err := os.Open(relativeGoldenTextFilePath)
+	h := sd.GenerateText()
+	testGoldenFile(t, relativeGoldenTextSummaryFilePath, h)
+}
 
-	if err != nil {
-		t.Errorf("couldn't open the golden file for reading: %v", err)
+func TestSummaryEmailData_GenerateBody(t *testing.T) {
+	sd := SummaryEmailData{
+		mtx: &sync.Mutex{},
+		Content: []SummaryContent{
+			{
+				Name:     "News",
+				Schedule: "Mondays, Thursdays at 13:00",
+			},
+			{
+				Name:     "Jokes",
+				Schedule: "Wednesdays at 16:00",
+			},
+			{
+				Name:     "Events",
+				Schedule: "Fridays at 12:00",
+			},
+		},
 	}
 
-	var content bytes.Buffer
-	_, err = content.ReadFrom(f)
-	if err != nil {
-		t.Errorf("couldn't read from the golden file %v", relativeGoldenTextFilePath)
-	}
-	if string(content.Bytes()) != h {
-		t.Errorf("the text generated from GenerateBody does not match the golden file at %v", relativeGoldenTextFilePath)
-	}
+	h := sd.GenerateBody()
+	testGoldenFile(t, relativeGoldenHTMLSummaryFilePath, h)
 }

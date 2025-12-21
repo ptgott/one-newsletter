@@ -34,15 +34,19 @@ email:
     toAddress: recipient@example.com
     username: MyUser123
     password: 123456-A_BCDE
-link_sources:
-    - name: site-38911
-      url: http://127.0.0.1:38911
-      itemSelector: "ul li"
-      captionSelector: "p"
-      linkSelector: "a"
 scraping:
     schedule: "M 12"
-    storageDir: ./tempTestDir3012705204`,
+    storageDir: ./tempTestDir3012705204
+newsletters:
+  mynewsletter:
+    schedule: MWF 12
+    link_sources:
+      - name: site-38911
+        url: http://127.0.0.1:38911
+        itemSelector: "ul li"
+        captionSelector: "p"
+        linkSelector: "a"
+`,
 		},
 		{
 			description:   "no email section",
@@ -60,7 +64,7 @@ scraping:
     storageDir: ./tempTestDir3012705204`,
 		},
 		{
-			description:   "no link_sources section",
+			description:   "no newsletters section",
 			shouldBeError: true,
 			shouldBeEmpty: true,
 			conf: `---
@@ -109,13 +113,18 @@ email:
     toAddress: recipient@example.com
     username: MyUser123
     password: 123456-A_BCDE
-link_sources:
-    - name: site-38911
-      url: http://127.0.0.1:38911
-      linkSelector: "a"
 scraping:
     schedule: "M 12"
-    storageDir: ./tempTestDir3012705204`,
+    storageDir: ./tempTestDir3012705204
+newsletters:
+  mynewsletter:
+    schedule: MWF 12
+    link_sources:
+        - name: site-38911
+          url: http://127.0.0.1:38911
+          linkSelector: "a"
+    
+`,
 		},
 		{
 			description:   "valid link source with no link selector",
@@ -128,12 +137,16 @@ email:
     toAddress: recipient@example.com
     username: MyUser123
     password: 123456-A_BCDE
-link_sources:
-    - name: site-38911
-      url: http://127.0.0.1:38911
 scraping:
     schedule: "M 13"
-    storageDir: ./tempTestDir3012705204`,
+    storageDir: ./tempTestDir3012705204
+newsletters:
+  mynewsletter:
+    schedule: MWF 12
+    link_sources:
+        - name: site-38911
+          url: http://127.0.0.1:38911
+`,
 		},
 	}
 
@@ -181,17 +194,12 @@ func TestScrapingUnmarshalYAML(t *testing.T) {
 			shouldBeError: false,
 			input: `storageDir: ./tempTestDir3012705204
 linkExpiryDays: 100
-schedule: "M 12"
 `,
 			expected: Scraping{
 				StorageDirPath: "./tempTestDir3012705204",
 				OneOff:         false,
 				TestMode:       false,
 				LinkExpiryDays: 100,
-				Schedule: NotificationSchedule{
-					Weekdays: Monday,
-					Hour:     12,
-				},
 			},
 		},
 		{
@@ -199,13 +207,6 @@ schedule: "M 12"
 			shouldBeError: true,
 			input:         `[]`,
 			expected:      Scraping{},
-		},
-		{
-			description:   "unparseable duration",
-			shouldBeError: true,
-			input: `interval: 5y
-storageDir: ./tempTestDir3012705204`,
-			expected: Scraping{},
 		},
 	}
 
@@ -403,7 +404,7 @@ func TestGet(t *testing.T) {
 		}
 		actual := s.Get(m)
 
-		assert.Equal(t, expected, actual)
+		assert.ElementsMatch(t, expected, actual)
 	})
 
 	t.Run("successive identical gets", func(t *testing.T) {
@@ -560,6 +561,29 @@ func Test_parseNotificationSchedule_invalid(t *testing.T) {
 		t.Run(c.description, func(t *testing.T) {
 			_, err := parseNotificationSchedule(c.input)
 			assert.ErrorContains(t, err, c.errSubstring)
+		})
+	}
+}
+
+func TestNotificationScheduleString(t *testing.T) {
+	cases := []struct {
+		description string
+		input       NotificationSchedule
+		expected    string
+	}{
+		{
+			description: "single weekday",
+			input: NotificationSchedule{
+				Weekdays: Friday,
+				Hour:     12,
+			},
+			expected: "Fridays at 12:00",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.description, func(t *testing.T) {
+			assert.Equal(t, c.expected, c.input.String())
 		})
 	}
 }
